@@ -148,7 +148,30 @@ The platform uses structured Google Sheets for both input schedules and output a
 
 ## 🛠️ Environment Configuration & Setup
 
-### 1. ViewStatsScraper Setup
+### 1. ProgramScheduleFetcher (Multi-Channel Program Schedule Fetcher & Uploader)
+
+```bash
+cd ProgramScheduleFetcher
+pip install -r requirements.txt
+cp .env.example .env
+```
+* deploy ```App.gs``` Google Apps Script Web App on your Google Sheet, then use the deployment URL ending in `/exec` to fill `GSHEET_URL` enviroment variable
+
+```bash
+python scheduler.py
+```
+
+### Purge old records
+Instead of `scheduler.py`, run `program.py` directly with `--purge DATE` (`DD-MM-YYYY`). This deletes matching rows immediately — there is no dry-run/preview mode.
+```
+python program.py --purge 1-9-2026                    # purge every mapped sheet
+python program.py --purge 1-9-2026 --sheet "Thai PBS"  # only the given sheet(s)
+```
+Running `python program.py` with no flags does a single one-off fetch (no loop, no purge).
+
+---
+
+### 2. ViewStatsScraper Setup
 ```bash
 cd ViewStatsScraper
 pip install -r requirements.txt
@@ -174,7 +197,7 @@ python test_facebook_session.py
 
 ---
 
-### 2. NewsScraper Setup
+### 3. NewsScraper Setup
 ```bash
 cd NewsScraper
 pip install -r requirements.txt
@@ -208,7 +231,7 @@ GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/<YOUR_NEWS_GOOGLE_SHE
 
 ---
 
-### 3. Interactive Analytics Dashboard (`dashboard.html`) Setup
+### 4. Interactive Analytics Dashboard (`dashboard.html`) Setup
 
 The dashboard is a single-file, zero-dependency HTML/JavaScript web application that streams data directly from Google Sheets (for news aggregation) and the Apps Script Web App (for live TV stream analytics).
 
