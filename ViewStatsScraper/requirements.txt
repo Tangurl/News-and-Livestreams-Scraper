@@ -1,0 +1,10 @@
+# Dependencies for ViewStatsScraper & LinkCrawler
+selenium>=4.15.0
+python-dotenv>=1.0.0
+requests>=2.28.0
+
+# AI Broadcast Genre Classification (ViewStatsScraper)
+scikit-learn>=1.3.0
+joblib>=1.3.0
+pythainlp>=4.0.0
+numpy>=1.24.0

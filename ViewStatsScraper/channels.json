@@ -1,0 +1,231 @@
+{
+  "3 HD": {
+    "aliases": [
+      "Ch3",
+      "3HD",
+      "ช่อง 3",
+      "Ch3Thailand"
+    ],
+    "facebook_url": "https://www.facebook.com/watch/Ch3Thailand/",
+    "youtube_url": "https://www.youtube.com/@ch3thailand/streams",
+    "x_url": "https://x.com/Ch3Thailand_33",
+    "tiktok_url": "https://www.tiktok.com/@ch3thailand/live"
+  },
+  "7 HD": {
+    "aliases": [
+      "Ch7",
+      "7HD",
+      "ช่อง 7",
+      "Ch7HD"
+    ],
+    "facebook_url": "https://www.facebook.com/watch/Ch7HD/",
+    "youtube_url": "https://www.youtube.com/@Ch7HD/streams",
+    "x_url": "https://x.com/Ch7HD",
+    "tiktok_url": "https://www.tiktok.com/@ch7hdofficial/live"
+  },
+  "8": {
+    "aliases": [
+      "Ch8",
+      "Channel 8",
+      "ช่อง 8",
+      "thaich8"
+    ],
+    "facebook_url": "https://www.facebook.com/watch/thaich8/",
+    "youtube_url": "https://www.youtube.com/@thaich8/streams",
+    "x_url": "https://x.com/thaich8news",
+    "tiktok_url": "https://www.tiktok.com/@thaich8/live"
+  },
+  "9 MCOT HD": {
+    "aliases": [
+      "9 MCOT",
+      "MCOT",
+      "MCOT HD",
+      "ช่อง 9",
+      "9MCOTHD"
+    ],
+    "facebook_url": "https://www.facebook.com/watch/9mcot/",
+    "youtube_url": "https://www.youtube.com/@9MCOT/streams",
+    "x_url": "https://x.com/9_mcot",
+    "tiktok_url": "https://www.tiktok.com/@tna.mcot/live"
+  },
+  "GMM Channel": {
+    "aliases": [
+      "GMM25",
+      "GMM 25",
+      "GMMTV",
+      "GMM Channel"
+    ],
+    "facebook_url": "https://www.facebook.com/watch/gmmtvofficial/",
+    "youtube_url": "https://www.youtube.com/@gmmtv/streams",
+    "x_url": "https://x.com/GMM25Thailand",
+    "tiktok_url": "https://www.tiktok.com/@gmm25channel/live"
+  },
+  "NBT 2 HD": {
+    "aliases": [
+      "NBT",
+      "NBT 2HD",
+      "NBT2HD",
+      "ช่อง 11",
+      "สทท"
+    ],
+    "facebook_url": "https://www.facebook.com/watch/NBTHD/",
+    "youtube_url": "https://www.youtube.com/@NBT2HD/streams",
+    "x_url": "https://x.com/nbt2hd",
+    "tiktok_url": "https://www.tiktok.com/@nbt2hdonline/live"
+  },
+  "Nation TV": {
+    "aliases": [
+      "Nation",
+      "NationTV",
+      "เนชั่น",
+      "Nation 22"
+    ],
+    "facebook_url": "https://www.facebook.com/watch/NationTVLive/",
+    "youtube_url": "https://www.youtube.com/@Nationtv22Live/streams",
+    "x_url": "https://x.com/NationOnlineth",
+    "tiktok_url": "https://www.tiktok.com/@nationonlineth"
+  },
+  "ONE": {
+    "aliases": [
+      "ONE 31",
+      "One31",
+      "one31",
+      "ช่องวัน",
+      "ช่องวัน 31"
+    ],
+    "facebook_url": "https://www.facebook.com/watch/one31Thailand/",
+    "youtube_url": "https://www.youtube.com/@one31official/streams",
+    "x_url": "https://x.com/onehdthailand",
+    "tiktok_url": "https://www.tiktok.com/@channel.one31/live"
+  },
+  "T Sports 7": {
+    "aliases": [
+      "TSports",
+      "TSports7",
+      "T Sports",
+      "ทีสปอร์ต"
+    ],
+    "facebook_url": "https://www.facebook.com/watch/TSports7Official/",
+    "youtube_url": "https://www.youtube.com/channel/UCC5EeWJ1sQszRLCIuy5OvFA/streams",
+    "x_url": "https://x.com/TSports7",
+    "tiktok_url": "https://www.tiktok.com/@tsports7/live"
+  },
+  "TNN16": {
+    "aliases": [
+      "TNN 16",
+      "TNN",
+      "TNN Thailand",
+      "ทีเอ็นเอ็น"
+    ],
+    "facebook_url": "https://www.facebook.com/watch/TNN16LIVE/",
+    "youtube_url": "https://www.youtube.com/@TNN.Online/streams",
+    "x_url": "https://x.com/tnnthailand",
+    "tiktok_url": "https://www.tiktok.com/@tnnonline/live"
+  },
+  "True4U": {
+    "aliases": [
+      "True 4U",
+      "True4U 24",
+      "ทรูโฟร์ยู"
+    ],
+    "facebook_url": "https://www.facebook.com/watch/True4U/",
+    "youtube_url": "https://www.youtube.com/@true4utv/streams",
+    "x_url": "https://x.com/true4utv",
+    "tiktok_url": "https://www.tiktok.com/@true4u/live"
+  },
+  "TV5 HD": {
+    "aliases": [
+      "TV5",
+      "TV5HD",
+      "ช่อง 5",
+      "ททบ.5"
+    ],
+    "facebook_url": "https://www.facebook.com/watch/TV5HDONLINE/",
+    "youtube_url": "https://www.youtube.com/channel/UC0bjXr3eG8cieKrXKutZeew/streams",
+    "x_url": "https://x.com/Tv5hdOnline",
+    "tiktok_url": "https://www.tiktok.com/@tv5hdonline/live"
+  },
+  "PPTV": {
+    "aliases": [
+      "PPTV HD 36",
+      "PPTVHD36",
+      "พีพีทีวี (PPTV)",
+      "พีพีทีวี"
+    ],
+    "facebook_url": "https://www.facebook.com/watch/PPTVHD36/",
+    "youtube_url": "https://www.youtube.com/@PPTVHD36/streams",
+    "x_url": "https://x.com/PPTVHD36",
+    "tiktok_url": "https://www.tiktok.com/@pptv.thailand/live"
+  },
+  "TP Channel": {
+    "aliases": [
+      "TPchannel",
+      "สถานีวิทยุและโทรทัศน์รัฐสภา",
+      "รัฐสภา"
+    ],
+    "facebook_url": "https://www.facebook.com/watch/TPchannelFan/",
+    "youtube_url": "https://www.youtube.com/@TPchannel10/streams",
+    "x_url": "https://x.com/TPchannelFan",
+    "tiktok_url": "https://www.tiktok.com/@tpchannelofficial"
+  },
+  "Thai PBS": {
+    "aliases": [
+      "ThaiPBS",
+      "ไทยพีบีเอส",
+      "ช่องหมายเลข 3"
+    ],
+    "facebook_url": "https://www.facebook.com/watch/ThaiPBS/",
+    "youtube_url": "https://www.youtube.com/@ThaiPBS/streams",
+    "x_url": "https://x.com/ThaiPBS",
+    "tiktok_url": "https://www.tiktok.com/@thaipbs/live"
+  },
+  "AMARIN TV HD": {
+    "aliases": [
+      "AMARIN TV",
+      "AmarinTV",
+      "Amarin",
+      "อมรินทร์",
+      "อมรินทร์ทีวี 34"
+    ],
+    "facebook_url": "https://www.facebook.com/watch/AMARINTVHD/",
+    "youtube_url": "https://www.youtube.com/channel/UCzMoibQRslh_1bTuW0YXc6A/streams",
+    "x_url": "https://x.com/amarintvhd",
+    "tiktok_url": "https://www.tiktok.com/@amarintvhd/live"
+  },
+  "Workpoint TV": {
+    "aliases": [
+      "Workpoint",
+      "Workpoint 23",
+      "เวิร์คพอยท์",
+      "ช่อง 23"
+    ],
+    "facebook_url": "https://www.facebook.com/watch/workpoint/",
+    "youtube_url": "https://www.youtube.com/@WorkpointOfficial/streams",
+    "x_url": "https://x.com/Workpoint_Ent",
+    "tiktok_url": "https://www.tiktok.com/@workpointofficial/live"
+  },
+  "MONO 29": {
+    "aliases": [
+      "MONO29",
+      "Mono29",
+      "โมโน 29",
+      "โมโน"
+    ],
+    "facebook_url": "https://www.facebook.com/watch/MonomaxSportsTV/",
+    "youtube_url": "https://www.youtube.com/channel/UCMOAZtTJ-y685oHwDs1Aiqg/streams",
+    "x_url": "https://x.com/mono29entertain",
+    "tiktok_url": "https://www.tiktok.com/@mono29tv/live"
+  },
+  "Thairath TV": {
+    "aliases": [
+      "Thairath",
+      "ThairathTV",
+      "ไทยรัฐ",
+      "ไทยรัฐทีวี 32"
+    ],
+    "facebook_url": "https://www.facebook.com/watch/thairathtv/",
+    "youtube_url": "https://www.youtube.com/@thairathnews/streams",
+    "x_url": "https://x.com/Thairath_News",
+    "tiktok_url": "https://www.tiktok.com/@thairath_news/live"
+  }
+}
