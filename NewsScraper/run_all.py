@@ -45,9 +45,7 @@ with open(ROOT_ENV, "r", encoding="utf-8") as f:
             os.environ.setdefault(k, v)
 
 GOOGLE_SHEET_ID = os.environ.get("GOOGLE_SHEET_ID", "").strip()
-GOOGLE_SHEET_URL = os.environ.get("GOOGLE_SHEET_URL", "").strip()
-if not GOOGLE_SHEET_URL and GOOGLE_SHEET_ID:
-    GOOGLE_SHEET_URL = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/edit?usp=sharing"
+GOOGLE_SHEET_URL = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/edit?usp=sharing"
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",

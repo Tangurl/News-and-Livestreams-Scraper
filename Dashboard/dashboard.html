@@ -3285,12 +3285,13 @@
         </div>
     </div>
 
+    <script src="config.js"></script>
     <script>
         // Google Sheet Configuration
-        const SHEET_ID = "";
+        const SHEET_ID = ENV.SHEET_ID;
 
         // Apps Script Web App (.env: APPS_SCRIPT_URL) — endpoint สำหรับหน้า "Live View Stats"
-        const VIEW_STATS_API = "";
+        const VIEW_STATS_API = ENV.SHEET_API;
 
         // Global State
         let allArticles = [];

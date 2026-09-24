@@ -100,3 +100,6 @@ ehthumbs.db
 .vscode/
 *.sublime-workspace
 *.sublime-project
+
+# Extras
+config.js
