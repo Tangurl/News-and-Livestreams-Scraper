@@ -74,9 +74,9 @@ To scrape articles published yesterday. It runs in a daily loop at a designated 
 python run_all.py -d -1 --time "09:00"
 ```
 
-#### Default Behavior Clarification:
+#### Default Behavior:
 * **Time Window:** By default, running `python run_all.py` without `-d` only scrapes today's articles (`days=0`). Passing `-d 7` instructs all scrapers to fetch news published over the past 7 days.
-* **Auto-Merge & Sheet Update:** **This is ALREADY the default behavior.** When `run_all.py` completes its scraping run, it automatically triggers `merge_csv_outputs()`, which:
+* **Auto-Merge & Sheet Update:**  When `run_all.py` completes its scraping run, it automatically triggers `merge_csv_outputs()`, which:
   1. Merges all 37+ news outlet CSV files into `master_scraped_data.csv`.
   2. Deduplicates articles by URL and sorts them chronologically (newest first).
   3. Automatically updates and synchronizes the entire master dataset to your connected Google Sheet (unless `--no-sheet` is explicitly passed).
