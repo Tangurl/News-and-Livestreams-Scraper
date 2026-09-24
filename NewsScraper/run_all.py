@@ -8,6 +8,11 @@ import subprocess
 import threading
 import concurrent.futures
 from datetime import datetime, timedelta
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    ZoneInfo = None
+
 
 print_lock = threading.Lock()
 
@@ -43,6 +48,18 @@ with open(ROOT_ENV, "r", encoding="utf-8") as f:
             if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
                 v = v[1:-1]
             os.environ.setdefault(k, v)
+
+# Timezone configuration (defaults to Asia/Bangkok)
+TZ_NAME = os.environ.get("TZ", "Asia/Bangkok").strip() or "Asia/Bangkok"
+if hasattr(time, "tzset"):
+    os.environ["TZ"] = TZ_NAME
+    time.tzset()
+
+try:
+    LOCAL_TZ = ZoneInfo(TZ_NAME) if ZoneInfo else None
+except Exception:
+    LOCAL_TZ = None
+
 
 GOOGLE_SHEET_ID = os.environ.get("NEWS_SHEET_ID", "").strip()
 GOOGLE_SHEET_URL = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/edit?usp=sharing"
@@ -684,7 +701,7 @@ def print_summary_table(results):
 
 def format_elapsed_time(seconds):
     """Formats elapsed seconds into a readable string (e.g. 1h 23m 45s or 12m 34s)."""
-    seconds = int(seconds)
+    seconds = max(0, int(seconds))
     hours, remainder = divmod(seconds, 3600)
     minutes, secs = divmod(remainder, 60)
     if hours > 0:
@@ -694,63 +711,53 @@ def format_elapsed_time(seconds):
     else:
         return f"{secs}s"
 
-def main():
-    start_time = time.time()
+def parse_time_str(time_str: str) -> tuple:
+    """Parses a time string in format HH:MM or HH:MM:SS into (hour, minute, second)."""
+    if not time_str or not isinstance(time_str, str):
+        raise ValueError("Time argument cannot be empty.")
     
-    parser = argparse.ArgumentParser(description="Master scraper runner.")
-    parser.add_argument(
-        "-d", "--days",
-        type=int,
-        default=None,
-        help="Number of days to scrape (1 for today only, 2 for today and yesterday, etc., or negative: -1 for yesterday only, -2 yesterday and day before)"
-    )
-    parser.add_argument(
-        "-c", "--concurrency", "--workers",
-        type=int,
-        default=10,
-        help="Number of concurrent scrapers to run in parallel (default: 10, set to 1 for sequential)"
-    )
-    parser.add_argument(
-        "-v", "--verbose",
-        action="store_true",
-        help="Stream real-time scraper stdout logs to console"
-    )
-    parser.add_argument(
-        "-t", "--timeout",
-        type=int,
-        default=None,
-        help="Max time in seconds to allow each scraper before timing out (default: auto-scales with days, min 300s. Set 0 to disable)"
-    )
-    parser.add_argument(
-        "-m", "--merge-only",
-        action="store_true",
-        help="Only merge the existing CSV files without running any scrapers"
-    )
-    parser.add_argument(
-        "--no-sheet",
-        action="store_true",
-        help="Skip syncing the merged data to Google Sheets"
-    )
-    parser.add_argument(
-        "--sheet-id",
-        type=str,
-        default=None,
-        help="Target Google Sheet ID to sync to (overrides GOOGLE_SHEET_ID in root .env)"
-    )
-    args = parser.parse_args()
-    days = args.days
-    concurrency = max(1, args.concurrency)
-    verbose = args.verbose
-    merge_only = args.merge_only
-    skip_gsheet = args.no_sheet
-    sheet_id = args.sheet_id
-    
-    # Auto-scale timeout based on days if not explicitly specified
-    if args.timeout is not None:
-        timeout_seconds = args.timeout
+    parts = time_str.strip().split(":")
+    if len(parts) == 2:
+        try:
+            hour, minute = int(parts[0]), int(parts[1])
+            second = 0
+        except ValueError:
+            raise ValueError(f"Invalid time format: '{time_str}'. Hour and minute must be integers.")
+    elif len(parts) == 3:
+        try:
+            hour, minute, second = int(parts[0]), int(parts[1]), int(parts[2])
+        except ValueError:
+            raise ValueError(f"Invalid time format: '{time_str}'. Hour, minute, and second must be integers.")
     else:
-        num_days = abs(days) if days is not None else 1
-        timeout_seconds = max(300, num_days * 90)  # e.g. 7 days -> 630s (10.5 mins)
+        raise ValueError(f"Invalid time format: '{time_str}'. Expected HH:MM or HH:MM:SS (e.g., '09:00').")
+    
+    if not (0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= second <= 59):
+        raise ValueError(f"Time values out of range in '{time_str}'. Hour must be 0-23, minute 0-59, second 0-59.")
+        
+    return hour, minute, second
+
+def get_next_run_time(hour: int, minute: int, second: int = 0) -> datetime:
+    """Calculates the next datetime corresponding to the given time in LOCAL_TZ.
+    If that time has already passed today, returns tomorrow at that time.
+    """
+    now = datetime.now(LOCAL_TZ) if LOCAL_TZ else datetime.now()
+    candidate = now.replace(hour=hour, minute=minute, second=second, microsecond=0)
+    if candidate <= now:
+        candidate += timedelta(days=1)
+    return candidate
+
+def sleep_until(target_dt: datetime, poll_interval: float = 5.0) -> None:
+    """Sleeps until target_dt, checking periodically to remain responsive to interruption signals."""
+    while True:
+        now = datetime.now(LOCAL_TZ) if LOCAL_TZ else datetime.now()
+        remaining = (target_dt - now).total_seconds()
+        if remaining <= 0:
+            break
+        time.sleep(min(remaining, poll_interval))
+
+def run_pipeline(days=None, concurrency=10, verbose=False, timeout_seconds=300, merge_only=False, skip_gsheet=False, sheet_id=None):
+    """Executes a single end-to-end run of the scraping and merging pipeline."""
+    start_time = time.time()
     
     if merge_only:
         merge_csv_outputs(days, skip_gsheet=skip_gsheet, sheet_id=sheet_id)
@@ -904,5 +911,129 @@ def main():
     print(f"⏱️  Total Run Time: {format_elapsed_time(elapsed)} ({elapsed:.2f} seconds)")
     print(f"=====================================================================")
 
+def main():
+    parser = argparse.ArgumentParser(description="Master scraper runner.")
+    parser.add_argument(
+        "-d", "--days",
+        type=int,
+        default=None,
+        help="Number of days to scrape (1 for today only, 2 for today and yesterday, etc., or negative: -1 for yesterday only, -2 yesterday and day before)"
+    )
+    parser.add_argument(
+        "-c", "--concurrency", "--workers",
+        type=int,
+        default=10,
+        help="Number of concurrent scrapers to run in parallel (default: 10, set to 1 for sequential)"
+    )
+    parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Stream real-time scraper stdout logs to console"
+    )
+    parser.add_argument(
+        "-t", "--timeout",
+        type=int,
+        default=None,
+        help="Max time in seconds to allow each scraper before timing out (default: auto-scales with days, min 300s. Set 0 to disable)"
+    )
+    parser.add_argument(
+        "-m", "--merge-only",
+        action="store_true",
+        help="Only merge the existing CSV files without running any scrapers"
+    )
+    parser.add_argument(
+        "--no-sheet",
+        action="store_true",
+        help="Skip syncing the merged data to Google Sheets"
+    )
+    parser.add_argument(
+        "--sheet-id",
+        type=str,
+        default=None,
+        help="Target Google Sheet ID to sync to (overrides GOOGLE_SHEET_ID in root .env)"
+    )
+    parser.add_argument(
+        "--time",
+        type=str,
+        default=None,
+        help="Designated daily time to run in a loop (e.g., '09:00' or '09:00:00' in Asia/Bangkok). Runs once immediately, then waits for the designated time to repeat."
+    )
+    args = parser.parse_args()
+    days = args.days
+    concurrency = max(1, args.concurrency)
+    verbose = args.verbose
+    merge_only = args.merge_only
+    skip_gsheet = args.no_sheet
+    sheet_id = args.sheet_id
+    
+    # Auto-scale timeout based on days if not explicitly specified
+    if args.timeout is not None:
+        timeout_seconds = args.timeout
+    else:
+        num_days = abs(days) if days is not None else 1
+        timeout_seconds = max(300, num_days * 90)  # e.g. 7 days -> 630s (10.5 mins)
+
+    target_time = None
+    if args.time:
+        try:
+            target_time = parse_time_str(args.time)
+        except ValueError as e:
+            parser.error(str(e))
+
+    try:
+        # Initial run
+        run_pipeline(
+            days=days,
+            concurrency=concurrency,
+            verbose=verbose,
+            timeout_seconds=timeout_seconds,
+            merge_only=merge_only,
+            skip_gsheet=skip_gsheet,
+            sheet_id=sheet_id
+        )
+
+        # If --time was not specified, stop after one run (keeping original behavior)
+        if not target_time:
+            return
+
+        h, m, s = target_time
+        time_display = f"{h:02d}:{m:02d}:{s:02d}" if s else f"{h:02d}:{m:02d}"
+
+        while True:
+            next_run = get_next_run_time(h, m, s)
+            now = datetime.now(LOCAL_TZ) if LOCAL_TZ else datetime.now()
+            wait_seconds = (next_run - now).total_seconds()
+            wait_str = format_elapsed_time(wait_seconds)
+            tz_label = TZ_NAME
+
+            print(f"\n=====================================================================")
+            print(f"🔁 Loop Mode Active (Daily at {time_display} {tz_label})")
+            print(f"🕒 Next execution scheduled at: {next_run.strftime('%Y-%m-%d %H:%M:%S')} ({tz_label}) [in {wait_str}]")
+            print(f"⏳ Waiting for designated time... (Press Ctrl+C to stop)")
+            print(f"=====================================================================")
+
+            sleep_until(next_run)
+
+            now_dt = datetime.now(LOCAL_TZ) if LOCAL_TZ else datetime.now()
+            print(f"\n=====================================================================")
+            print(f"⏰ Designated time reached: {now_dt.strftime('%Y-%m-%d %H:%M:%S')} ({tz_label})")
+            print(f"🚀 Starting scheduled execution...")
+            print(f"=====================================================================")
+
+            run_pipeline(
+                days=days,
+                concurrency=concurrency,
+                verbose=verbose,
+                timeout_seconds=timeout_seconds,
+                merge_only=merge_only,
+                skip_gsheet=skip_gsheet,
+                sheet_id=sheet_id
+            )
+
+    except KeyboardInterrupt:
+        print("\n\n🛑 Execution stopped by user. Exiting cleanly.")
+        sys.exit(0)
+
 if __name__ == "__main__":
     main()
+

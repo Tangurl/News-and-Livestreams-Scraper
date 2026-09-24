@@ -69,9 +69,9 @@ python view_stats_scraper.py --loop --interval 300 --refresh-schedules
 
 ### 3. Multi-Portal News Scraper (`NewsScraper/run_all.py`)
 
-To scrape articles published yesterday:
+To scrape articles published yesterday. It runs in a daily loop at a designated time (runs once immediately, then waits for designated time e.g. 09:00 Bangkok time)::
 ```bash
-python run_all.py -d -1
+python run_all.py -d -1 --time "09:00"
 ```
 
 #### Default Behavior Clarification:

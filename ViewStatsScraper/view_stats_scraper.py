@@ -942,7 +942,7 @@ def run_scrape_cycle(
         pass
 
     if not schedules_by_channel:
-        print("⚠️ No channel schedules returned from Google Sheets or local cache. Check POST_SCRIPT_API URL.")
+        print("⚠️ No channel schedules returned from Google Sheets or local cache. Check STREAM_STATS_API URL.")
         return []
 
     # Fetch link configuration (Channel Multi-Links & Broadcast Overrides)
@@ -1101,11 +1101,11 @@ def parse_args():
 def main():
     args = parse_args()
 
-    api_url = os.environ.get("POST_SCRIPT_API", "").strip()
+    api_url = os.environ.get("STREAM_STATS_API", "").strip()
     token = os.environ.get("API_TOKEN", "").strip() or None
 
     if not api_url:
-        print("❌ Error: POST_SCRIPT_API is not set in environment or .env file.")
+        print("❌ Error: STREAM_STATS_API is not set in environment or .env file.")
         sys.exit(1)
 
     override_dt = None

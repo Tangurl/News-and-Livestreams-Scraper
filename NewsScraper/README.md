@@ -36,6 +36,10 @@ You can run the script manually or through command scripts:
   ```cmd
   .venv\Scripts\python run_all.py -d -1
   ```
+* **Run in a daily loop at a designated time** (runs once immediately, then waits for designated time e.g. 09:00 Bangkok time):
+  ```cmd
+  .venv\Scripts\python run_all.py -d -1 --time "09:00"
+  ```
 
 ### Step 4: Schedule Daily Execution
 On Windows Server, you can use the built-in **Task Scheduler** to automate runs:
