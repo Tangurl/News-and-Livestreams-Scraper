@@ -477,7 +477,7 @@ def process_due_schedules(
             print(_platform_line("X       ", has_x, x_link))
         elif past_items:
             latest_past = past_items[-1]
-            end_t_str = latest_past.get("end_time", latest_past["datetime"] + timedelta(hours=3)).strftime('%H:%M น.')
+            end_t_str = latest_past.get("end_time", latest_past["datetime"] + timedelta(hours=3)).strftime('%H:%M') + ' น.'
             print(f"📺 {ch_pfx}ขณะนี้ไม่มีรายการที่กำลังออกอากาศ (รายการล่าสุด '{latest_past['title']}' เวลา {latest_past['date']} {latest_past['time']} น. จบไปแล้วเมื่อ {end_t_str})")
         else:
             print(f"📋 {ch_pfx}ไม่มีรายการที่เริ่มออกอากาศแล้วในขณะนี้")
