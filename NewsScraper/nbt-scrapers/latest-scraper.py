@@ -11,7 +11,7 @@ from selenium.webdriver.common.by import By
 # Configuration
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_URL = "https://thainews.prd.go.th"
-CATEGORY_URL = "https://thainews.prd.go.th/thainews/news/list/%E0%B8%A5%E0%B9%88%E0%B8%B2%E0%B8%AA%E0%B8%B8%E0%B8%94/"
+CATEGORY_URL = "https://thainews.prd.go.th/thainews/news/list/ล่าสุด"
 CSV_FILE = os.path.join(SCRIPT_DIR, "nbt_latest.csv")
 
 def setup_driver():
@@ -308,7 +308,36 @@ def main():
                 time.sleep(1)
                 
             if not articles:
+                # Try triggering Next.js router transition in case dynamic route did not decode
+                driver.execute_script("""
+                try {
+                    if (window.next && window.next.router) {
+                        window.next.router.push({
+                            pathname: '/thainews/news/list/[id]',
+                            query: { id: 'ล่าสุด' }
+                        });
+                    }
+                } catch(e) {}
+                """)
+                for _ in range(10):
+                    articles = get_page_articles(driver)
+                    if articles:
+                        break
+                    time.sleep(1)
+
+            if not articles:
                 print("No articles found on page after waiting.")
+                try:
+                    debug_url = driver.current_url
+                    debug_title = driver.title
+                    debug_body = driver.execute_script("return document.body ? document.body.innerText.slice(0, 200).replace(/\\n+/g, ' ') : ''")
+                    debug_next = driver.execute_script("return window.next ? (window.next.router ? JSON.stringify(window.next.router.query) : 'no router') : 'no next'")
+                    print(f"  [Debug] Current URL: {debug_url}")
+                    print(f"  [Debug] Title: {debug_title}")
+                    print(f"  [Debug] Next.js Router Query: {debug_next}")
+                    print(f"  [Debug] Page text snippet: {debug_body}")
+                except Exception as dbg_err:
+                    print(f"  [Debug error]: {dbg_err}")
                 break
                 
             new_articles = [art for art in articles if art["url"] not in scraped_urls]
