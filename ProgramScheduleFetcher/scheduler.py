@@ -14,7 +14,7 @@ import program
 # --------------------------------------------------------------------------- #
 
 # required so datetime.now() reflects local time via the OS clock (container TZ env var)
-os.environ["TZ"]
+os.environ.setdefault("TZ", "Asia/Bangkok")
 if hasattr(time, "tzset"):
     time.tzset()
 

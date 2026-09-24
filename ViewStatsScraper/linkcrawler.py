@@ -50,26 +50,29 @@ from modules.cache_manager import (
 from modules.link_resolver import resolve_target_urls_for_program
 from modules.utilities import is_thaipbs_channel, reset_facebook_blocked_status
 
-try:
-    from dotenv import load_dotenv
-    load_dotenv(override=True)
-except ImportError:
-    pass
+_ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_ROOT_ENV = os.path.join(_ROOT_DIR, ".env")
 
-def load_env_fallback():
-    env_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
-    if os.path.exists(env_file):
-        with open(env_file, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    k, v = line.split("=", 1)
-                    k, v = k.strip(), v.strip()
-                    if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
-                        v = v[1:-1]
-                    os.environ.setdefault(k, v)
+def load_env_root():
+    if not os.path.isfile(_ROOT_ENV):
+        sys.exit(f"❌ [Config Error] Root .env file not found at: {_ROOT_ENV}\nA .env file at the project root is strictly required. Halting execution.")
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(_ROOT_ENV, override=True)
+    except ImportError:
+        pass
+    with open(_ROOT_ENV, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                k, v = k.strip(), v.strip()
+                if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+                    v = v[1:-1]
+                os.environ.setdefault(k, v)
 
-load_env_fallback()
+load_env_root()
+load_env_fallback = load_env_root
 
 
 def parse_schedule_datetime(date_str: str, time_str: str) -> Optional[datetime]:

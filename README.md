@@ -148,14 +148,32 @@ The platform uses structured Google Sheets for both input schedules and output a
 
 ## 🛠️ Environment Configuration & Setup
 
+### 0. Unified Environment Configuration (`.env`)
+
+All modules (`NewsScraper`, `ViewStatsScraper`, and `ProgramScheduleFetcher`) pull their configuration from a single `.env` file located at the repository root.
+
+Copy the template to create your `.env`:
+```bash
+cp .env.example .env
+```
+
+Key configuration variables in root `.env`:
+* **`POST_SCRIPT_API` / `GSHEET_URL`**: Deployed Google Apps Script Web App URL (`.../exec`).
+* **`GOOGLE_SHEET_ID`**: Target Google Sheet ID for `NewsScraper/run_all.py` (string between `/d/` and `/edit` in your spreadsheet URL).
+* **`CRAWLER_CONCURRENCY`**: Concurrency limit for link crawler (Default: `5`).
+* **`FB_AUTO_LOGIN`**: Enable automated re-authentication (`true`/`false`).
+* **`FB_EMAIL` / `FB_PASSWORD`**: Facebook account credentials for authenticated live stream access.
+* **`DTT_URL` / `REQUEST_TIMEOUT` / `APPS_SCRIPT_TIMEOUT`**: DTT Guide API & Apps Script timeout settings.
+
+---
+
 ### 1. ProgramScheduleFetcher (Multi-Channel Program Schedule Fetcher & Uploader)
 
 ```bash
 cd ProgramScheduleFetcher
 pip install -r requirements.txt
-cp .env.example .env
 ```
-* deploy ```App.gs``` Google Apps Script Web App on your Google Sheet, then use the deployment URL ending in `/exec` to fill `GSHEET_URL` enviroment variable
+* Deploy `App.gs` Google Apps Script Web App on your Google Sheet, then set `POST_SCRIPT_API` (or `GSHEET_URL`) in the root `.env`.
 
 ```bash
 python scheduler.py
@@ -175,14 +193,7 @@ Running `python program.py` with no flags does a single one-off fetch (no loop, 
 ```bash
 cd ViewStatsScraper
 pip install -r requirements.txt
-cp .env.example .env
 ```
-
-Key variables in `.env`:
-* `POST_SCRIPT_API`: Google Apps Script Web App URL (`.../exec`).
-* `CRAWLER_CONCURRENCY`: Concurrency limit (Default: `5`).
-* `FB_AUTO_LOGIN`: Enable automated re-authentication (`true`/`false`).
-* `FB_EMAIL` / `FB_PASSWORD`: Facebook account credentials for authenticated live stream access.
 
 #### Facebook Authentication (One-Time Setup)
 ```bash
@@ -220,14 +231,11 @@ Google Sheets Authentication (`token.json`):
 * **If `token.json` is Missing:** `run_all.py` will still scrape and generate `master_scraped_data.csv` locally, but will print a warning and skip updating the Google Sheet.
 
 Target Google Sheet Configuration:
-In `NewsScraper/run_all.py`, configure your target Google Sheet:
-* **Line 23 (`GOOGLE_SHEET_ID`)**: The ID of your target spreadsheet (the string between `/d/` and `/edit` in your Google Sheets URL).
-* **Line 24 (`GOOGLE_SHEET_URL`)**: The full sharing/edit URL of your target Google Sheet.
-
-```python
-GOOGLE_SHEET_ID = "<YOUR_NEWS_GOOGLE_SHEET_ID>"
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/<YOUR_NEWS_GOOGLE_SHEET_ID>/edit?usp=sharing"
+In the root `.env`, set:
+```env
+GOOGLE_SHEET_ID="<YOUR_NEWS_GOOGLE_SHEET_ID>"
 ```
+`run_all.py` automatically reads `GOOGLE_SHEET_ID` from the root `.env`. You can also override it on the fly with `--sheet-id <ID>`.
 
 ---
 
@@ -246,12 +254,12 @@ const VIEW_STATS_API = "<YOUR_APPS_SCRIPT_WEB_APP_URL>";
 ```
 
 1. **`SHEET_ID` (Line 3290)**:
-   * Paste your **News Google Sheet ID** (the same Sheet ID configured in `NewsScraper/run_all.py`).
+   * Paste your **News Google Sheet ID** (the same Sheet ID configured in root `.env`).
    * Ensure the Google Sheet permissions are set to **"Anyone with the link can view"** so the dashboard can query the sheet via the Google Visualization API.
 
 2. **`VIEW_STATS_API` (Line 3293)**:
    * Paste your deployed **Google Apps Script Web App URL** (`https://script.google.com/macros/s/.../exec`).
-   * This is **the exact same URL** set in `ViewStatsScraper/.env` under `POST_SCRIPT_API`.
+   * This is **the exact same URL** set in root `.env` under `POST_SCRIPT_API`.
    * Powers real-time live view counts, peak statistics, channel comparisons, and link overrides.
 
 3. **Running the Dashboard**:

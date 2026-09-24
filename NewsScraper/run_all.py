@@ -19,9 +19,36 @@ def safe_print(*args, **kwargs):
 
 # Configuration
 WORKSPACE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(WORKSPACE_DIR)
 MASTER_CSV = os.path.join(WORKSPACE_DIR, "master_scraped_data.csv")
-GOOGLE_SHEET_ID = ""
-GOOGLE_SHEET_URL = ""
+
+ROOT_ENV = os.path.join(ROOT_DIR, ".env")
+if not os.path.isfile(ROOT_ENV):
+    safe_print(f"❌ [Config Error] Root .env file not found at: {ROOT_ENV}")
+    safe_print("A .env file at the project root is strictly required. Halting execution.")
+    sys.exit(1)
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv(ROOT_ENV, override=True)
+except ImportError:
+    pass
+
+with open(ROOT_ENV, "r", encoding="utf-8") as f:
+    for line in f:
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            k, v = k.strip(), v.strip()
+            if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+                v = v[1:-1]
+            os.environ.setdefault(k, v)
+
+GOOGLE_SHEET_ID = os.environ.get("GOOGLE_SHEET_ID", "").strip()
+GOOGLE_SHEET_URL = os.environ.get("GOOGLE_SHEET_URL", "").strip()
+if not GOOGLE_SHEET_URL and GOOGLE_SHEET_ID:
+    GOOGLE_SHEET_URL = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}/edit?usp=sharing"
+
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"
@@ -404,11 +431,18 @@ def parse_thai_date(date_str):
     except Exception:
         return datetime.min
 
-def sync_to_google_sheet(csv_path, sheet_id=GOOGLE_SHEET_ID):
+def sync_to_google_sheet(csv_path, sheet_id=None):
     """Syncs the master CSV content to Google Spreadsheet."""
+    target_sheet_id = (sheet_id or GOOGLE_SHEET_ID or os.environ.get("GOOGLE_SHEET_ID") or os.environ.get("NEWS_GOOGLE_SHEET_ID") or os.environ.get("SHEET_ID") or "").strip()
+    if not target_sheet_id:
+        print("\n[Google Sheet] Warning: GOOGLE_SHEET_ID is not configured in .env. Skipping Google Sheet sync.")
+        return False
+
     token_path = os.path.join(WORKSPACE_DIR, "thaipbs-scrapers", "token.json")
     if not os.path.exists(token_path):
         token_path = os.path.join(WORKSPACE_DIR, "token.json")
+    if not os.path.exists(token_path):
+        token_path = os.path.join(ROOT_DIR, "token.json")
         
     if not os.path.exists(token_path):
         print(f"\n[Google Sheet] Warning: token.json not found. Skipping Google Sheet sync.")
@@ -426,7 +460,7 @@ def sync_to_google_sheet(csv_path, sheet_id=GOOGLE_SHEET_ID):
                 f.write(creds.to_json())
                 
         client = gspread.authorize(creds)
-        sheet = client.open_by_key(sheet_id)
+        sheet = client.open_by_key(target_sheet_id)
         ws = sheet.sheet1
         
         with open(csv_path, "r", encoding="utf-8") as f:
@@ -437,7 +471,8 @@ def sync_to_google_sheet(csv_path, sheet_id=GOOGLE_SHEET_ID):
             print("\n[Google Sheet] No rows found to sync.")
             return False
             
-        print(f"\n[Google Sheet] Syncing {len(rows)-1} articles to '{sheet.title}' ({GOOGLE_SHEET_URL})...")
+        target_sheet_url = GOOGLE_SHEET_URL or f"https://docs.google.com/spreadsheets/d/{target_sheet_id}/edit?usp=sharing"
+        print(f"\n[Google Sheet] Syncing {len(rows)-1} articles to '{sheet.title}' ({target_sheet_url})...")
         
         # Ensure sheet dimensions
         current_rows = ws.row_count
@@ -465,7 +500,7 @@ def sync_to_google_sheet(csv_path, sheet_id=GOOGLE_SHEET_ID):
         print(f"[Google Sheet] Error syncing to Google Sheet: {e}")
         return False
 
-def merge_csv_outputs(days=None, skip_gsheet=False):
+def merge_csv_outputs(days=None, skip_gsheet=False, sheet_id=None):
     """Reads all generated CSV files from scraper directories, merges them, sorts them by date, and writes the master CSV.
     If days is specified, filters the merged articles accordingly:
       - days > 0: includes articles from today and up to (days-1) days ago.
@@ -597,7 +632,7 @@ def merge_csv_outputs(days=None, skip_gsheet=False):
         
         # Sync to Google Sheets
         if not skip_gsheet:
-            sync_to_google_sheet(MASTER_CSV)
+            sync_to_google_sheet(MASTER_CSV, sheet_id=sheet_id)
             
     except Exception as e:
         print(f"Error writing master CSV: {e}")
@@ -698,12 +733,19 @@ def main():
         action="store_true",
         help="Skip syncing the merged data to Google Sheets"
     )
+    parser.add_argument(
+        "--sheet-id",
+        type=str,
+        default=None,
+        help="Target Google Sheet ID to sync to (overrides GOOGLE_SHEET_ID in root .env)"
+    )
     args = parser.parse_args()
     days = args.days
     concurrency = max(1, args.concurrency)
     verbose = args.verbose
     merge_only = args.merge_only
     skip_gsheet = args.no_sheet
+    sheet_id = args.sheet_id
     
     # Auto-scale timeout based on days if not explicitly specified
     if args.timeout is not None:
@@ -713,7 +755,7 @@ def main():
         timeout_seconds = max(300, num_days * 90)  # e.g. 7 days -> 630s (10.5 mins)
     
     if merge_only:
-        merge_csv_outputs(days, skip_gsheet=skip_gsheet)
+        merge_csv_outputs(days, skip_gsheet=skip_gsheet, sheet_id=sheet_id)
         elapsed = time.time() - start_time
         print(f"\n=====================================================================")
         print(f"⏱️  Total Run Time: {format_elapsed_time(elapsed)} ({elapsed:.2f} seconds)")
@@ -856,7 +898,7 @@ def main():
     print_summary_table(results)
     
     # 4. Merge CSV outputs
-    merge_csv_outputs(None, skip_gsheet=skip_gsheet)
+    merge_csv_outputs(None, skip_gsheet=skip_gsheet, sheet_id=sheet_id)
     
     # 5. Print Execution Time
     elapsed = time.time() - start_time

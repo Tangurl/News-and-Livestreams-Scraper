@@ -26,34 +26,27 @@ except ImportError:
     print("   (หรือสำหรับ Windows: python -m pip install -r requirements.txt)")
     print("=" * 70)
     sys.exit(1)
+_ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_ROOT_ENV = os.path.join(_ROOT_DIR, ".env")
+
+if not os.path.isfile(_ROOT_ENV):
+    sys.exit(f"❌ [Config Error] Root .env file not found at: {_ROOT_ENV}\nA .env file at the project root is strictly required. Halting execution.")
+
 try:
     from dotenv import load_dotenv
-    env_paths = [
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"),
-        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"),
-    ]
-    for p in env_paths:
-        if os.path.isfile(p):
-            load_dotenv(p)
-            break
+    load_dotenv(_ROOT_ENV, override=True)
 except ImportError:
     pass
 
-# Manual env fallback
-for env_f in (
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"),
-    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"),
-):
-    if os.path.isfile(env_f):
-        with open(env_f, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    k, v = line.split("=", 1)
-                    k, v = k.strip(), v.strip()
-                    if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
-                        v = v[1:-1]
-                    os.environ.setdefault(k, v)
+with open(_ROOT_ENV, "r", encoding="utf-8") as f:
+    for line in f:
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            k, v = k.strip(), v.strip()
+            if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+                v = v[1:-1]
+            os.environ.setdefault(k, v)
 
 
 from modules.utilities import (

@@ -12,14 +12,37 @@ import os
 import sys
 import warnings
 from typing import Dict, List, Tuple
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+    _has_dotenv = True
+except ImportError:
+    _has_dotenv = False
 
 # Filter scikit-learn pickle version warnings
 warnings.filterwarnings("ignore")
 
 # Load environment
-env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
-load_dotenv(env_path)
+_ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_ROOT_ENV = os.path.join(_ROOT_DIR, ".env")
+
+if not os.path.isfile(_ROOT_ENV):
+    sys.exit(f"❌ [Config Error] Root .env file not found at: {_ROOT_ENV}\nA .env file at the project root is strictly required. Halting execution.")
+
+if _has_dotenv:
+    try:
+        load_dotenv(_ROOT_ENV, override=True)
+    except Exception:
+        pass
+
+with open(_ROOT_ENV, "r", encoding="utf-8") as f:
+    for line in f:
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            k, v = k.strip(), v.strip()
+            if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+                v = v[1:-1]
+            os.environ.setdefault(k, v)
 
 # Import classifier
 here = os.path.dirname(os.path.abspath(__file__))

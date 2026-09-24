@@ -4,7 +4,6 @@ import os
 import sys
 sys.dont_write_bytecode = True
 import time
-import dotenv
 
 import argparse
 import json
@@ -24,10 +23,32 @@ for _stream in (sys.stdout, sys.stderr):
         pass
 
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_ROOT_DIR = os.path.dirname(_BASE_DIR)
 _CONFIG_DIR = os.path.join(_BASE_DIR, "configuration")
 
 CHANNELS_FILE = os.path.join(_CONFIG_DIR, "channels.txt")
 CHANNELS_FILE_LABEL = "configuration/channels.txt"
+
+_ROOT_ENV = os.path.join(_ROOT_DIR, ".env")
+
+if not os.path.isfile(_ROOT_ENV):
+    sys.exit(f"❌ [Config Error] Root .env file not found at: {_ROOT_ENV}\nA .env file at the project root is strictly required. Halting execution.")
+
+try:
+    import dotenv
+    dotenv.load_dotenv(_ROOT_ENV, override=True)
+except ImportError:
+    pass
+
+with open(_ROOT_ENV, "r", encoding="utf-8") as f:
+    for line in f:
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            k, v = k.strip(), v.strip()
+            if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+                v = v[1:-1]
+            os.environ.setdefault(k, v)
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO").upper(),
@@ -37,21 +58,19 @@ logging.basicConfig(
 )
 log = logging.getLogger("fetcher")
 
-dotenv.load_dotenv(os.path.join(_BASE_DIR, ".env"))
-
 # --------------------------------------------------------------------------- #
 # Settings
 # --------------------------------------------------------------------------- #
 
-REQUEST_TIMEOUT = int(os.environ["REQUEST_TIMEOUT"])
-APPS_SCRIPT_TIMEOUT = int(os.environ["APPS_SCRIPT_TIMEOUT"])
-MAX_RETRIES = int(os.environ["MAX_RETRIES"])
-RETRY_WAIT = int(os.environ["RETRY_WAIT"])
+REQUEST_TIMEOUT = int(os.environ.get("REQUEST_TIMEOUT", "60"))
+APPS_SCRIPT_TIMEOUT = int(os.environ.get("APPS_SCRIPT_TIMEOUT", "300"))
+MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "5"))
+RETRY_WAIT = int(os.environ.get("RETRY_WAIT", "5"))
 
-API_URL = os.environ["DTT_URL"]
+API_URL = os.environ.get("DTT_URL", "https://dttguide.nbtc.go.th/BcsEpgDataServices/BcsEpgDataController/getProgramDataWeb")
 API_PAYLOAD = {"channelType": "1"}
 
-APPS_SCRIPT_URL = os.environ["GSHEET_URL"]
+APPS_SCRIPT_URL = os.environ.get("GSHEET_URL") or os.environ.get("POST_SCRIPT_API", "")
 
 # --------------------------------------------------------------------------- #
 # Fetch DTT's API
