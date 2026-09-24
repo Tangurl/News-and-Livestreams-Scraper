@@ -3,6 +3,7 @@ import re
 import csv
 import time
 import argparse
+import urllib.request
 from datetime import datetime, timezone, timedelta
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -122,6 +123,22 @@ def get_page_articles(driver):
 
 def get_article_detail_info(url, max_retries=3):
     """Visits the ThaiNews article detail page and extracts exact title, published date and time."""
+    # Fast path: fetch HTML directly via HTTP (takes ~50ms instead of 4s Chrome launch)
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            html = response.read().decode('utf-8', errors='ignore')
+            h1_match = re.search(r'<h1[^>]*>(.*?)</h1>', html, re.DOTALL)
+            date_match = re.search(r'(\d{1,2}\s+[ก-๙\.]+\s+\d{2,4}\s*(?:\|\s*)?\d{1,2}[:\.]\d{2}\s*น\.)', html)
+            if h1_match and date_match:
+                title = re.sub(r'<[^>]+>', '', h1_match.group(1)).strip()
+                date_str = date_match.group(1).strip()
+                formatted_date, dt_obj = normalize_thainews_date(date_str)
+                if dt_obj:
+                    return title, formatted_date, dt_obj
+    except Exception:
+        pass
+
     for attempt in range(max_retries):
         driver = None
         try:
@@ -246,9 +263,18 @@ def main():
         time.sleep(5)
         
         # Paginate / Click load more until max_pages or cutoff
-        should_paginate = (max_pages is not None and max_pages > 1) or (max_pages is None and start_date is not None)
+        if max_pages is not None:
+            max_auto_pages = max_pages
+        elif max_days is not None:
+            days_count = abs(max_days)
+            max_auto_pages = 5 if days_count <= 2 else min(days_count * 3, 15)
+        else:
+            max_auto_pages = 5
+
+        should_paginate = max_auto_pages > 1
         while should_paginate:
-            if max_pages is not None and page >= max_pages:
+            if page >= max_auto_pages:
+                print(f"Reached pagination limit of {max_auto_pages} pages. Proceeding to extract articles.")
                 break
                 
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
@@ -267,7 +293,7 @@ def main():
                 break
                 
             initial_count = len(get_page_articles(driver))
-            print(f"Clicking 'ดูเพิ่มเติม' (button.flex-center) - page {page + 1}/{max_pages or 'auto'}...")
+            print(f"Clicking 'ดูเพิ่มเติม' (button.flex-center) - page {page + 1}/{max_auto_pages}...")
             try:
                 driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", btn)
                 time.sleep(0.5)
