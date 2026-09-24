@@ -97,12 +97,13 @@ def normalize_nbt_date(raw_date_str):
 def get_page_articles(driver):
     """Finds all news articles on current NBT ThaiNews listing page."""
     articles = driver.execute_script("""
-    var links = Array.from(document.querySelectorAll('a.text-decoration-none, a[href*="/news/view/"]'));
+    var links = Array.from(document.querySelectorAll('a.text-decoration-none, a[href*="/news/view/"], a[href*="/news/"]'));
     var out = [];
     var seen = new Set();
     
     for (var a of links) {
-        if (!a.href || !a.href.includes('/news/view/')) continue;
+        if (!a.href || (!a.href.includes('/news/view/') && !a.href.includes('/news/'))) continue;
+        if (a.href.endsWith('/news/list/') || a.href.includes('/news/list/')) continue;
         if (seen.has(a.href)) continue;
         
         var titleEl = a.querySelector('div > div:nth-child(2) > div:nth-child(1)');
@@ -110,13 +111,38 @@ def get_page_articles(driver):
         var catEl = a.querySelector('label') || a.querySelector('div > div:nth-child(2) > div:nth-child(2) > div:nth-child(2)');
         
         var title = titleEl ? titleEl.innerText.trim() : '';
+        if (!title) {
+            var headings = a.querySelectorAll('h1, h2, h3, h4, h5, h6, [class*="title"], p');
+            for (var h of headings) {
+                if (h.innerText.trim().length > 3) {
+                    title = h.innerText.trim();
+                    break;
+                }
+            }
+            if (!title && a.innerText.trim()) {
+                var lines = a.innerText.trim().split('\\n').map(function(s){return s.trim();}).filter(Boolean);
+                if (lines.length > 0) title = lines[0];
+            }
+        }
         if (!title) continue;
+        
+        var rawDate = dateEl ? dateEl.innerText.trim() : '';
+        if (!rawDate) {
+            var dateCandidates = a.querySelectorAll('[class*="date"], small, time, span');
+            for (var d of dateCandidates) {
+                var txt = d.innerText.trim();
+                if (/\\d+/.test(txt) && (txt.includes('ก.พ.') || txt.includes('มี.ค.') || txt.includes('เม.ย.') || txt.includes('พ.ค.') || txt.includes('มิ.ย.') || txt.includes('ก.ค.') || txt.includes('ส.ค.') || txt.includes('ก.ย.') || txt.includes('ต.ค.') || txt.includes('พ.ย.') || txt.includes('ธ.ค.') || txt.includes('ม.ค.'))) {
+                    rawDate = txt;
+                    break;
+                }
+            }
+        }
         
         seen.add(a.href);
         out.push({
             url: a.href,
             title: title,
-            raw_date: dateEl ? dateEl.innerText.trim() : '',
+            raw_date: rawDate,
             raw_cat: catEl ? catEl.innerText.trim() : '-'
         });
     }
@@ -273,9 +299,16 @@ def main():
                 break
                 
             print(f"\n--- Scraping Page {page} ---")
-            articles = get_page_articles(driver)
+            articles = []
+            max_wait = 25 if page == 1 else 10
+            for w in range(max_wait):
+                articles = get_page_articles(driver)
+                if articles:
+                    break
+                time.sleep(1)
+                
             if not articles:
-                print("No articles found on page.")
+                print("No articles found on page after waiting.")
                 break
                 
             new_articles = [art for art in articles if art["url"] not in scraped_urls]
