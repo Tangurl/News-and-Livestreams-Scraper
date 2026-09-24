@@ -58,7 +58,40 @@ def kill_all_active_processes():
     for p in procs:
         kill_process_tree(p)
 
+def clean_orphaned_chrome_windows():
+    """Forcefully cleans up orphaned chromedriver and headless chrome processes on Windows."""
+    if sys.platform == "win32":
+        try:
+            # Terminate all chromedrivers started for scraping
+            subprocess.run(["taskkill", "/F", "/IM", "chromedriver.exe"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # Terminate only headless Chrome processes (safely leaves user's interactive Chrome untouched)
+            subprocess.run(
+                ["powershell", "-NoProfile", "-Command",
+                 "Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'chrome.exe') -and ($_.CommandLine -like '*headless*') } | Stop-Process -Force"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+        except Exception:
+            pass
+
+def cleanup_and_exit(signum=None, frame=None):
+    """Instant one-hit termination for Ctrl+C (SIGINT) and SIGTERM."""
+    safe_print("\n\n🛑 Stop signal received. Forcefully terminating scrapers and headless Chrome...")
+    kill_all_active_processes()
+    clean_orphaned_chrome_windows()
+    safe_print("Cleanup complete. Exiting immediately.")
+    os._exit(0)
+
+# Register signal handler for immediate one-hit Ctrl+C termination
+try:
+    signal.signal(signal.SIGINT, cleanup_and_exit)
+    if hasattr(signal, "SIGTERM"):
+        signal.signal(signal.SIGTERM, cleanup_and_exit)
+except Exception:
+    pass
+
 atexit.register(kill_all_active_processes)
+atexit.register(clean_orphaned_chrome_windows)
 
 def safe_print(*args, **kwargs):
     """Thread-safe print function."""
@@ -976,22 +1009,22 @@ def run_pipeline(days=None, channels=None, concurrency=10, verbose=False, timeou
             results.append(res)
     else:
         # Concurrent execution with ThreadPoolExecutor
-        with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
-            futures = []
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=concurrency)
+        futures = []
+        try:
             for st in scraper_tasks:
                 futures.append(
                     executor.submit(run_single_scraper_worker, st, scraper_days, total_tasks, progress_tracker, verbose=verbose, timeout_seconds=timeout_seconds)
                 )
                 time.sleep(0.2)  # Slight stagger to avoid driver lock collisions on initial Chrome startup
-            try:
-                for future in concurrent.futures.as_completed(futures):
-                    results.append(future.result())
-            except KeyboardInterrupt:
-                for f in futures:
-                    f.cancel()
-                kill_all_active_processes()
-                executor.shutdown(wait=False, cancel_futures=True)
-                raise
+            for future in concurrent.futures.as_completed(futures):
+                results.append(future.result())
+        except KeyboardInterrupt:
+            for f in futures:
+                f.cancel()
+            cleanup_and_exit()
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
                 
     # Sort results by channel and category for neat table display
     results.sort(key=lambda r: (r["channel"], r["category"]))
@@ -1087,6 +1120,10 @@ def main():
         except ValueError as e:
             parser.error(str(e))
 
+    # Clean up any lingering headless Chrome instances from prior interrupted runs
+    if sys.platform == "win32":
+        clean_orphaned_chrome_windows()
+
     try:
         # Initial run
         run_pipeline(
@@ -1140,10 +1177,7 @@ def main():
             )
 
     except KeyboardInterrupt:
-        print("\n\n🛑 Execution stopped by user. Cleaning up background scrapers and Chrome processes...")
-        kill_all_active_processes()
-        print("Cleanup complete. Exiting.")
-        os._exit(0)
+        cleanup_and_exit()
 
 if __name__ == "__main__":
     main()
