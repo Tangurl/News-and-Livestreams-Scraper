@@ -17,6 +17,18 @@ except ImportError:
 import atexit
 import signal
 
+# Force UTF-8 encoding across Windows console & pipes to prevent UnicodeEncodeError
+if sys.platform == "win32":
+    os.environ["PYTHONIOENCODING"] = "utf-8"
+    os.environ["PYTHONUTF8"] = "1"
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 print_lock = threading.Lock()
 active_processes = set()
 active_processes_lock = threading.Lock()
@@ -212,6 +224,9 @@ def run_single_scraper_worker(scraper_info, days=None, total_count=0, progress_t
         
     output_lines = []
     process = None
+    sub_env = os.environ.copy()
+    sub_env["PYTHONIOENCODING"] = "utf-8"
+    sub_env["PYTHONUTF8"] = "1"
     try:
         process = subprocess.Popen(
             cmd,
@@ -219,7 +234,10 @@ def run_single_scraper_worker(scraper_info, days=None, total_count=0, progress_t
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            bufsize=1
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+            env=sub_env
         )
         register_process(process)
         
