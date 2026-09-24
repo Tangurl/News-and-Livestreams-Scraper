@@ -28,6 +28,10 @@ def setup_driver():
     chrome_options.add_experimental_option("prefs", chrome_prefs)
     
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--disable-software-rasterizer")
+    # Resolve Thai Government PRD domain directly to avoid local DNS/VPN SERVFAIL issues
+    chrome_options.add_argument("--host-resolver-rules=MAP thainews.prd.go.th 122.155.92.9")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_experimental_option('useAutomationExtension', False)
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
@@ -245,7 +249,16 @@ def main():
     
     try:
         print(f"Loading URL: {CATEGORY_URL}")
-        driver.get(CATEGORY_URL)
+        for attempt in range(3):
+            try:
+                driver.get(CATEGORY_URL)
+                break
+            except Exception as e:
+                if attempt < 2:
+                    print(f"Warning: Failed to load {CATEGORY_URL} ({e}). Retrying in 3 seconds...")
+                    time.sleep(3)
+                else:
+                    raise
         time.sleep(6)
         
         while True:
