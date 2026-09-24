@@ -41,6 +41,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 _ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _ROOT_ENV = os.path.join(_ROOT_DIR, ".env")
@@ -273,7 +274,7 @@ def find_active_program_for_channel(
         return None
 
     if target_dt is None:
-        target_dt = datetime.now()
+        target_dt = datetime.now(ZoneInfo("Asia/Bangkok"))
 
     # Parse and validate datetimes for each row
     parsed_items = []
@@ -859,7 +860,7 @@ def format_count_display(val) -> str:
 def print_summary_table(snapshots: List[Dict]):
     """Pretty prints the snapshot results table to the console."""
     print("\n" + "=" * 125)
-    print(f"📊 LIVE VIEW STATS SNAPSHOT | Captured at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"📊 LIVE VIEW STATS SNAPSHOT | Captured at: {datetime.now(ZoneInfo('Asia/Bangkok')).strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 125)
 
     header = f"{'Channel':<13} | {'Genre':<11} | {'Sched':<6} | {'Broadcast Title':<22} | {'FB Views':<9} | {'YT Views':<9} | {'TikTok':<9} | {'X Views':<9}"
@@ -906,7 +907,7 @@ def run_scrape_cycle(
       3. Scrapes view counts concurrently (max N per platform).
       4. Appends result rows to Google Sheet tab "View Stats".
     """
-    capture_dt = override_time if override_time else datetime.now()
+    capture_dt = override_time if override_time else datetime.now(ZoneInfo("Asia/Bangkok"))
     print(f"\n🚀 [View Stats] Starting capture cycle for time: {capture_dt.strftime('%Y-%m-%d %H:%M:%S')}")
     if skip_x:
         print("  • X Platform: ข้ามการดึงยอดวิวทุกช่อง (--skip-x)")
@@ -1114,7 +1115,7 @@ def main():
             if " " in args.time:
                 override_dt = datetime.strptime(args.time, "%Y-%m-%d %H:%M:%S")
             elif ":" in args.time:
-                today = datetime.now()
+                today = datetime.now(ZoneInfo("Asia/Bangkok"))
                 parts = args.time.split(":")
                 override_dt = datetime(today.year, today.month, today.day, int(parts[0]), int(parts[1]))
         except Exception as e:

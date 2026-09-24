@@ -3287,11 +3287,10 @@
 
     <script src="config.js"></script>
     <script>
-        // Google Sheet Configuration
-        const SHEET_ID = ENV.SHEET_ID;
-
-        // Apps Script Web App (.env: APPS_SCRIPT_URL) — endpoint สำหรับหน้า "Live View Stats"
-        const VIEW_STATS_API = ENV.SHEET_API;
+        // News Sheet ID for getting news dashboard 1 data
+        const SHEET_ID = ENV.NEWS_SHEET_ID;
+        // for dashboard 2 (view stats) data
+        const VIEW_STATS_API = ENV.STREAM_STATS_API;
 
         // Global State
         let allArticles = [];
