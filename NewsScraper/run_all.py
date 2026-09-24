@@ -197,7 +197,7 @@ def count_csv_rows(csv_path):
     except Exception:
         return 0
 
-def run_single_scraper_worker(scraper_info, days=None, total_count=0, progress_tracker=None, verbose=False, timeout_seconds=300):
+def run_single_scraper_worker(scraper_info, days=None, total_count=0, progress_tracker=None, verbose=False, timeout_seconds=300, retries=0):
     """Runs a single scraper script in a subprocess with cwd set to its directory.
     Thread-safe and supports concurrent worker execution."""
     s = scraper_info["path"]
@@ -211,12 +211,14 @@ def run_single_scraper_worker(scraper_info, days=None, total_count=0, progress_t
     
     with print_lock:
         if progress_tracker is not None:
-            progress_tracker["started"] += 1
+            if retries == 0:
+                progress_tracker["started"] += 1
             start_idx = progress_tracker["started"]
         else:
             start_idx = 1
             
-    safe_print(f"[{start_idx}/{total_count}] 🚀 STARTING: {channel_name} - {category_name} ({script_name})")
+    retry_label = f" (Attempt {retries + 1})" if retries > 0 else ""
+    safe_print(f"[{start_idx}/{total_count}] 🚀 STARTING: {channel_name} - {category_name} ({script_name}){retry_label}")
     
     cmd = [sys.executable, "-u", script_name]
     if days is not None:
@@ -293,6 +295,29 @@ def run_single_scraper_worker(scraper_info, days=None, total_count=0, progress_t
                     
         final_rows = count_csv_rows(csv_path)
         new_scraped = max(0, final_rows - initial_rows)
+        
+        # Check if error is due to transient driver lock / startup collision
+        driver_conflict = (retries < 1 and any(p in full_output for p in [
+            "NoSuchDriverException",
+            "Unable to obtain driver",
+            "BaseThreadInitThunk",
+            "RtlUserThreadStart",
+            "SessionNotCreatedException",
+            "Chrome failed to start"
+        ]))
+        
+        if failed and driver_conflict:
+            safe_print(f"   ⚠️ Driver startup conflict for {channel_name} - {category_name}. Retrying in 2 seconds...")
+            time.sleep(2)
+            return run_single_scraper_worker(
+                scraper_info,
+                days=days,
+                total_count=total_count,
+                progress_tracker=progress_tracker,
+                verbose=verbose,
+                timeout_seconds=timeout_seconds,
+                retries=retries + 1
+            )
         
         with print_lock:
             if progress_tracker is not None:
@@ -952,10 +977,12 @@ def run_pipeline(days=None, channels=None, concurrency=10, verbose=False, timeou
     else:
         # Concurrent execution with ThreadPoolExecutor
         with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
-            futures = [
-                executor.submit(run_single_scraper_worker, st, scraper_days, total_tasks, progress_tracker, verbose=verbose, timeout_seconds=timeout_seconds)
-                for st in scraper_tasks
-            ]
+            futures = []
+            for st in scraper_tasks:
+                futures.append(
+                    executor.submit(run_single_scraper_worker, st, scraper_days, total_tasks, progress_tracker, verbose=verbose, timeout_seconds=timeout_seconds)
+                )
+                time.sleep(0.2)  # Slight stagger to avoid driver lock collisions on initial Chrome startup
             try:
                 for future in concurrent.futures.as_completed(futures):
                     results.append(future.result())
@@ -992,8 +1019,8 @@ def main():
     parser.add_argument(
         "-c", "--concurrency", "--workers",
         type=int,
-        default=10,
-        help="Number of concurrent scrapers to run in parallel (default: 10, set to 1 for sequential)"
+        default=5,
+        help="Number of concurrent scrapers to run in parallel (default: 5, recommended 4-6 on Windows)"
     )
     parser.add_argument(
         "-v", "--verbose",
