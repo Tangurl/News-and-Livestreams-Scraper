@@ -10,6 +10,7 @@ import urllib.request
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple
 from urllib.parse import urljoin, urlparse, parse_qs, unquote
+from zoneinfo import ZoneInfo
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -1635,7 +1636,7 @@ def find_matching_video(
         minutes_ago = parse_relative_time_to_minutes(time_text)
 
         if scheduled_dt:
-            is_today = (scheduled_dt.date() == datetime.now().date())
+            is_today = (scheduled_dt.date() == datetime.now(ZoneInfo("Asia/Bangkok")).date())
             if is_today:
                 # 1) ตรวจสอบจาก time_text
                 if time_text:
@@ -1647,7 +1648,7 @@ def find_matching_video(
 
                 # 2) ตรวจสอบจาก minutes_ago
                 if minutes_ago is not None:
-                    stream_start_dt = datetime.now() - timedelta(minutes=minutes_ago)
+                    stream_start_dt = datetime.now(ZoneInfo("Asia/Bangkok")) - timedelta(minutes=minutes_ago)
                     # หากเวลาเริ่มสตรีมเป็นวันก่อนหน้า (ก่อน 00:00 ของวันนี้) -> ปฏิเสธทันที
                     if stream_start_dt.date() < scheduled_dt.date():
                         continue
@@ -1659,7 +1660,7 @@ def find_matching_video(
 
         # ตรวจสอบความสอดคล้องของเวลาออกอากาศ (Stream Start Time Consistency Check)
         if minutes_ago is not None and scheduled_dt:
-            stream_start_dt = datetime.now() - timedelta(minutes=minutes_ago)
+            stream_start_dt = datetime.now(ZoneInfo("Asia/Bangkok")) - timedelta(minutes=minutes_ago)
             # gap_mins = เวลาผัง - เวลาเริ่มสตรีมจริง (บวกหมายถึงสตรีมเริ่มก่อนเวลาผัง)
             gap_mins = (scheduled_dt - stream_start_dt).total_seconds() / 60
 

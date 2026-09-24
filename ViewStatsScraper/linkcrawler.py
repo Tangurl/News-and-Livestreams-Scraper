@@ -6,6 +6,7 @@ import re
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple, Union
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from zoneinfo import ZoneInfo
 
 # รองรับการแสดงผลภาษาไทยบน Windows Terminal
 if sys.stdout.encoding != 'utf-8':
@@ -123,7 +124,7 @@ def parse_schedule_datetime(date_str: str, time_str: str) -> Optional[datetime]:
                 else:  # ค.ศ. เช่น 26 -> 2026
                     year = 2000 + p2
 
-            parsed_date = datetime(year, month, day, hour, minute)
+            parsed_date = datetime(year, month, day, hour, minute, tzinfo=ZoneInfo("Asia/Bangkok"))
 
         return parsed_date
     except Exception as e:
@@ -183,7 +184,7 @@ def seed_master_results_from_schedule(
     """
     master_results: Dict[str, Dict] = {}
     unsynced_items: List[Dict] = []
-    system_now = datetime.now()
+    system_now = datetime.now(ZoneInfo("Asia/Bangkok"))
 
     def _is_real_url(val: Optional[str]) -> bool:
         v = str(val or "").strip()
@@ -327,7 +328,7 @@ def process_due_schedules(
     คืนค่า (updated_items, upcoming_items)
     """
     MAX_ATTEMPTS_PER_PLATFORM = max_attempts
-    system_now = datetime.now()
+    system_now = datetime.now(ZoneInfo("Asia/Bangkok"))
     should_skip_x = skip_x or (skip_x_except_thaipbs and not is_thaipbs_channel(channel_name))
 
     # กรองเฉพาะรายการที่มี datetime ถูกต้อง และเรียงตามลำดับเวลา
@@ -956,7 +957,7 @@ def start_live_scheduler(
     try:
         schedules: List[Dict] = fetch_sheet_schedule(api_url=script_api_url, sheet=channel_name, token=script_api_token)
         if current_only and schedules:
-            now_dt = datetime.now()
+            now_dt = datetime.now(ZoneInfo("Asia/Bangkok"))
             today_d = now_dt.date()
             yesterday_d = today_d - timedelta(days=1)
             dates = [s["datetime"].date() for s in schedules if s.get("datetime")]
@@ -1004,7 +1005,7 @@ def start_live_scheduler(
         while True:
             iteration += 1
             reset_facebook_blocked_status()
-            system_now = datetime.now()
+            system_now = datetime.now(ZoneInfo("Asia/Bangkok"))
             print(f"\n{'='*30} รอบตรวจสอบที่ #{iteration} ({system_now.strftime('%Y-%m-%d %H:%M:%S')}) {'='*30}")
 
             # ประมวลผลรายการที่ถึงเวลา
@@ -1064,7 +1065,7 @@ def start_live_scheduler(
             # แสดงข้อมูลรายการถัดไปที่กำลังรอเวลาออกอากาศ + delay
             if upcoming_items:
                 # เรียงลำดับรายการตามเวลาที่ใกล้จะถึงที่สุด
-                upcoming_items.sort(key=lambda x: x.get("trigger_time", datetime.max))
+                upcoming_items.sort(key=lambda x: x.get("trigger_time", datetime.max.replace(tzinfo=ZoneInfo("Asia/Bangkok"))))
                 next_item = upcoming_items[0]
                 wait_sec = int(next_item["wait_seconds"])
                 wait_min = wait_sec // 60
@@ -1186,7 +1187,7 @@ def start_multi_channel_scheduler(
                 "tiktok_url": str(r.get("tiktok_url", "")).strip()
             })
         if current_only and sched_list:
-            now_dt = datetime.now()
+            now_dt = datetime.now(ZoneInfo("Asia/Bangkok"))
             today_d = now_dt.date()
             yesterday_d = today_d - timedelta(days=1)
             dates = [s["datetime"].date() for s in sched_list if s.get("datetime")]
@@ -1276,7 +1277,7 @@ def start_multi_channel_scheduler(
         while True:
             iteration += 1
             reset_facebook_blocked_status()
-            system_now = datetime.now()
+            system_now = datetime.now(ZoneInfo("Asia/Bangkok"))
             print(f"\n{'='*30} รอบตรวจสอบที่ #{iteration} ({system_now.strftime('%Y-%m-%d %H:%M:%S')}) {'='*30}")
 
             all_upcoming = []
@@ -1314,7 +1315,7 @@ def start_multi_channel_scheduler(
                     )
 
             if all_upcoming:
-                all_upcoming.sort(key=lambda x: x.get("trigger_time", datetime.max))
+                all_upcoming.sort(key=lambda x: x.get("trigger_time", datetime.max.replace(tzinfo=ZoneInfo("Asia/Bangkok"))))
                 next_item = all_upcoming[0]
                 wait_sec = max(0, int(next_item["wait_seconds"]))
                 wait_min = wait_sec // 60

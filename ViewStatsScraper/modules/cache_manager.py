@@ -15,6 +15,7 @@ import re
 import tempfile
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 # Default TTL in days for purging old records
 DEFAULT_CACHE_TTL_DAYS = 3
@@ -142,7 +143,7 @@ def purge_old_crawled_urls(data: Dict, ttl_days: int = DEFAULT_CACHE_TTL_DAYS) -
     Purges crawled URL records older than ttl_days.
     Returns (cleaned_data, purged_count).
     """
-    cutoff_date = datetime.now().date() - timedelta(days=ttl_days)
+    cutoff_date = datetime.now(ZoneInfo("Asia/Bangkok")).date() - timedelta(days=ttl_days)
     purged_count = 0
     channels_dict = data.get("channels", {})
     cleaned_channels = {}
@@ -213,12 +214,12 @@ def save_crawled_url(
         "youtube_url": _pick(youtube_url, existing.get("youtube_url")),
         "x_url": _pick(x_url, existing.get("x_url")),
         "tiktok_url": _pick(tiktok_url, existing.get("tiktok_url")),
-        "updated_at": datetime.now().isoformat()
+        "updated_at": datetime.now(ZoneInfo("Asia/Bangkok")).isoformat()
     }
 
     # Auto-purge records older than 3 days
     data, purged = purge_old_crawled_urls(data, ttl_days=ttl_days)
-    data["last_updated"] = datetime.now().isoformat()
+    data["last_updated"] = datetime.now(ZoneInfo("Asia/Bangkok")).isoformat()
 
     try:
         _atomic_write_json(cache_path, data)
@@ -302,7 +303,7 @@ def purge_old_schedules(schedules: Dict[str, List[Dict]], ttl_days: int = DEFAUL
     Purges schedule rows with dates older than ttl_days.
     Returns (cleaned_schedules, purged_rows_count).
     """
-    cutoff_date = datetime.now().date() - timedelta(days=ttl_days)
+    cutoff_date = datetime.now(ZoneInfo("Asia/Bangkok")).date() - timedelta(days=ttl_days)
     purged_count = 0
     cleaned = {}
 
@@ -332,7 +333,7 @@ def save_schedules_cache(
 
     cleaned_schedules, _ = purge_old_schedules(schedules, ttl_days=ttl_days)
     payload = {
-        "saved_at": datetime.now().isoformat(),
+        "saved_at": datetime.now(ZoneInfo("Asia/Bangkok")).isoformat(),
         "total_channels": len(cleaned_schedules),
         "total_rows": sum(len(v) for v in cleaned_schedules.values()),
         "schedules": cleaned_schedules
@@ -358,7 +359,9 @@ def load_schedules_cache(max_age_seconds: int = 14400) -> Optional[Dict[str, Lis
     if max_age_seconds > 0 and data.get("saved_at"):
         try:
             saved_time = datetime.fromisoformat(data["saved_at"])
-            age_sec = (datetime.now() - saved_time).total_seconds()
+            if saved_time.tzinfo is None:
+                saved_time = saved_time.replace(tzinfo=ZoneInfo("Asia/Bangkok"))
+            age_sec = (datetime.now(ZoneInfo("Asia/Bangkok")) - saved_time).total_seconds()
             if age_sec > max_age_seconds:
                 return None
         except Exception:
