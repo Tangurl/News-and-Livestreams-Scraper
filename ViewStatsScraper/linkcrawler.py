@@ -1477,7 +1477,7 @@ if __name__ == "__main__":
     elif is_all_facebook_login_disabled and is_all_facebook_login_disabled():
         print("🚫 [Facebook Login] ปิดการใช้งานบัญชีล็อกอิน Facebook ตามการตั้งค่าใน facebook_login_targets.json (enabled: false)")
 
-    SCRIPT_API_URL = get_env_with_default("POST_SCRIPT_API")
+    SCRIPT_API_URL = get_env_with_default("STREAM_STATS_API")
     SCRIPT_API_TOKEN = os.getenv("SCRIPT_API_TOKEN") or None
 
     PAGE_WAIT_SECONDS_FB = int(os.getenv("PAGE_WAIT_SECONDS_FB", "8"))

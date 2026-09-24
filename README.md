@@ -158,7 +158,7 @@ cp .env.example .env
 ```
 
 Key configuration variables in root `.env`:
-* **`POST_SCRIPT_API` / `GSHEET_URL`**: Deployed Google Apps Script Web App URL (`.../exec`).
+* **`STREAM_STATS_API`**: Deployed Google Apps Script Web App URL (`.../exec`).
 * **`GOOGLE_SHEET_ID`**: Target Google Sheet ID for `NewsScraper/run_all.py` (string between `/d/` and `/edit` in your spreadsheet URL).
 * **`CRAWLER_CONCURRENCY`**: Concurrency limit for link crawler (Default: `5`).
 * **`FB_AUTO_LOGIN`**: Enable automated re-authentication (`true`/`false`).

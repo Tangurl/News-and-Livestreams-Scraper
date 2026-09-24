@@ -70,7 +70,7 @@ RETRY_WAIT = int(os.environ.get("RETRY_WAIT", "5"))
 API_URL = os.environ.get("DTT_URL", "https://dttguide.nbtc.go.th/BcsEpgDataServices/BcsEpgDataController/getProgramDataWeb")
 API_PAYLOAD = {"channelType": "1"}
 
-APPS_SCRIPT_URL = os.environ.get("GSHEET_URL") or os.environ.get("POST_SCRIPT_API", "")
+APPS_SCRIPT_URL = os.environ.get("STREAM_STATS_API")
 
 # --------------------------------------------------------------------------- #
 # Fetch DTT's API
