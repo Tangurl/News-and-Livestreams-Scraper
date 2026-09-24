@@ -32,6 +32,79 @@ if sys.platform == "win32":
 print_lock = threading.Lock()
 active_processes = set()
 active_processes_lock = threading.Lock()
+is_shutting_down = threading.Event()
+GLOBAL_JOB = None
+
+def init_windows_job():
+    """Initializes a Windows Job Object configured to kill all child processes on exit."""
+    if sys.platform != "win32":
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+        kernel32 = ctypes.windll.kernel32
+        hJob = kernel32.CreateJobObjectW(None, None)
+        if not hJob:
+            return None
+        
+        class JOBOBJECT_BASIC_LIMIT_INFORMATION(ctypes.Structure):
+            _fields_ = [
+                ('PerProcessUserTimeLimit', wintypes.LARGE_INTEGER),
+                ('PerJobUserTimeLimit', wintypes.LARGE_INTEGER),
+                ('LimitFlags', wintypes.DWORD),
+                ('MinimumWorkingSetSize', ctypes.c_size_t),
+                ('MaximumWorkingSetSize', ctypes.c_size_t),
+                ('ActiveProcessLimit', wintypes.DWORD),
+                ('Affinity', ctypes.c_size_t),
+                ('PriorityClass', wintypes.DWORD),
+                ('SchedulingClass', wintypes.DWORD),
+            ]
+
+        class IO_COUNTERS(ctypes.Structure):
+            _fields_ = [
+                ('ReadOperationCount', ctypes.c_uint64),
+                ('WriteOperationCount', ctypes.c_uint64),
+                ('OtherOperationCount', ctypes.c_uint64),
+                ('ReadTransferCount', ctypes.c_uint64),
+                ('WriteTransferCount', ctypes.c_uint64),
+                ('OtherTransferCount', ctypes.c_uint64),
+            ]
+
+        class JOBOBJECT_EXTENDED_LIMIT_INFORMATION(ctypes.Structure):
+            _fields_ = [
+                ('BasicLimitInformation', JOBOBJECT_BASIC_LIMIT_INFORMATION),
+                ('IoInfo', IO_COUNTERS),
+                ('ProcessMemoryLimit', ctypes.c_size_t),
+                ('JobMemoryLimit', ctypes.c_size_t),
+                ('PeakProcessMemoryLimit', ctypes.c_size_t),
+                ('PeakJobMemoryLimit', ctypes.c_size_t),
+            ]
+
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
+        info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION()
+        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        kernel32.SetInformationJobObject(hJob, 9, ctypes.byref(info), ctypes.sizeof(info))
+        return hJob
+    except Exception:
+        return None
+
+GLOBAL_JOB = init_windows_job()
+
+def assign_process_to_job(pid):
+    """Assigns a process and all its future child processes (ChromeDriver, Chrome) to the Job Object."""
+    if not GLOBAL_JOB or sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        PROCESS_SET_QUOTA = 0x0100
+        PROCESS_TERMINATE = 0x0001
+        hProcess = kernel32.OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, False, pid)
+        if hProcess:
+            kernel32.AssignProcessToJobObject(GLOBAL_JOB, hProcess)
+            kernel32.CloseHandle(hProcess)
+    except Exception:
+        pass
 
 def register_process(p):
     with active_processes_lock:
@@ -42,7 +115,7 @@ def unregister_process(p):
         active_processes.discard(p)
 
 def kill_process_tree(p):
-    """Forcefully kill process and all of its child processes (including chrome.exe/chromedriver.exe)."""
+    """Forcefully kill process and all of its child processes."""
     try:
         if sys.platform == "win32":
             subprocess.run(["taskkill", "/F", "/T", "/PID", str(p.pid)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -58,27 +131,33 @@ def kill_all_active_processes():
     for p in procs:
         kill_process_tree(p)
 
-def clean_orphaned_chrome_windows():
-    """Forcefully cleans up orphaned chromedriver and headless chrome processes on Windows."""
-    if sys.platform == "win32":
+def cleanup_and_exit(signum=None, frame=None):
+    """Instant one-hit termination for Ctrl+C (SIGINT) and SIGTERM."""
+    if is_shutting_down.is_set():
+        os._exit(0)
+    is_shutting_down.set()
+    safe_print("\n\n🛑 Stop signal received. Forcefully terminating scrapers and Chrome...")
+    
+    # 1. Kill all tracked active processes
+    kill_all_active_processes()
+    
+    # 2. Close Job Object to trigger kernel-level kill on Windows
+    global GLOBAL_JOB
+    if GLOBAL_JOB:
         try:
-            # Terminate all chromedrivers started for scraping
-            subprocess.run(["taskkill", "/F", "/IM", "chromedriver.exe"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            # Terminate only headless Chrome processes (safely leaves user's interactive Chrome untouched)
-            subprocess.run(
-                ["powershell", "-NoProfile", "-Command",
-                 "Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'chrome.exe') -and ($_.CommandLine -like '*headless*') } | Stop-Process -Force"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
+            import ctypes
+            ctypes.windll.kernel32.CloseHandle(GLOBAL_JOB)
+            GLOBAL_JOB = None
         except Exception:
             pass
 
-def cleanup_and_exit(signum=None, frame=None):
-    """Instant one-hit termination for Ctrl+C (SIGINT) and SIGTERM."""
-    safe_print("\n\n🛑 Stop signal received. Forcefully terminating scrapers and headless Chrome...")
-    kill_all_active_processes()
-    clean_orphaned_chrome_windows()
+    # 3. Fast cleanup of any lingering chromedriver processes
+    if sys.platform == "win32":
+        try:
+            subprocess.run(["taskkill", "/F", "/IM", "chromedriver.exe"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+            
     safe_print("Cleanup complete. Exiting immediately.")
     os._exit(0)
 
@@ -91,7 +170,6 @@ except Exception:
     pass
 
 atexit.register(kill_all_active_processes)
-atexit.register(clean_orphaned_chrome_windows)
 
 def safe_print(*args, **kwargs):
     """Thread-safe print function."""
@@ -240,6 +318,17 @@ def run_single_scraper_worker(scraper_info, days=None, total_count=0, progress_t
     script_dir = os.path.dirname(s)
     csv_path = get_csv_path(s)
     
+    if is_shutting_down.is_set():
+        return {
+            "channel": channel_name,
+            "category": category_name,
+            "success": False,
+            "status_str": "CANCELLED",
+            "new_count": 0,
+            "total_count": count_csv_rows(csv_path),
+            "log": "Cancelled due to shutdown"
+        }
+
     initial_rows = count_csv_rows(csv_path)
     
     with print_lock:
@@ -275,6 +364,7 @@ def run_single_scraper_worker(scraper_info, days=None, total_count=0, progress_t
             env=sub_env
         )
         register_process(process)
+        assign_process_to_job(process.pid)
         
         for line in process.stdout:
             if verbose:
@@ -339,9 +429,19 @@ def run_single_scraper_worker(scraper_info, days=None, total_count=0, progress_t
             "Chrome failed to start"
         ]))
         
-        if failed and driver_conflict:
+        if failed and driver_conflict and not is_shutting_down.is_set():
             safe_print(f"   ⚠️ Driver startup conflict for {channel_name} - {category_name}. Retrying in 2 seconds...")
             time.sleep(2)
+            if is_shutting_down.is_set():
+                return {
+                    "channel": channel_name,
+                    "category": category_name,
+                    "success": False,
+                    "status_str": "CANCELLED",
+                    "new_count": 0,
+                    "total_count": count_csv_rows(csv_path),
+                    "log": "Cancelled due to shutdown"
+                }
             return run_single_scraper_worker(
                 scraper_info,
                 days=days,
@@ -1013,15 +1113,17 @@ def run_pipeline(days=None, channels=None, concurrency=10, verbose=False, timeou
         futures = []
         try:
             for st in scraper_tasks:
+                if is_shutting_down.is_set():
+                    break
                 futures.append(
                     executor.submit(run_single_scraper_worker, st, scraper_days, total_tasks, progress_tracker, verbose=verbose, timeout_seconds=timeout_seconds)
                 )
                 time.sleep(0.2)  # Slight stagger to avoid driver lock collisions on initial Chrome startup
             for future in concurrent.futures.as_completed(futures):
+                if is_shutting_down.is_set():
+                    break
                 results.append(future.result())
         except KeyboardInterrupt:
-            for f in futures:
-                f.cancel()
             cleanup_and_exit()
         finally:
             executor.shutdown(wait=False, cancel_futures=True)
@@ -1120,9 +1222,12 @@ def main():
         except ValueError as e:
             parser.error(str(e))
 
-    # Clean up any lingering headless Chrome instances from prior interrupted runs
+    # Fast cleanup of any lingering chromedriver instances from prior runs
     if sys.platform == "win32":
-        clean_orphaned_chrome_windows()
+        try:
+            subprocess.run(["taskkill", "/F", "/IM", "chromedriver.exe"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
 
     try:
         # Initial run
