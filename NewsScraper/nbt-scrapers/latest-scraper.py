@@ -11,7 +11,7 @@ from selenium.webdriver.common.by import By
 # Configuration
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_URL = "https://thainews.prd.go.th"
-CATEGORY_URL = "https://thainews.prd.go.th/thainews/news/list/%E0%B8%A5%E0%B9%88%E0%B8%B2%E0%B8%AA%E0%B8%B8%E0%B8%94/"
+CATEGORY_URL = "https://thainews.prd.go.th/thainews/news/list/ล่าสุด"
 CSV_FILE = os.path.join(SCRIPT_DIR, "nbt_latest.csv")
 
 def setup_driver():
@@ -28,6 +28,10 @@ def setup_driver():
     chrome_options.add_experimental_option("prefs", chrome_prefs)
     
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--disable-software-rasterizer")
+    # Resolve Thai Government PRD domain directly to avoid local DNS/VPN SERVFAIL issues
+    chrome_options.add_argument("--host-resolver-rules=MAP thainews.prd.go.th 122.155.92.9")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
     chrome_options.add_experimental_option('useAutomationExtension', False)
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
@@ -93,12 +97,13 @@ def normalize_nbt_date(raw_date_str):
 def get_page_articles(driver):
     """Finds all news articles on current NBT ThaiNews listing page."""
     articles = driver.execute_script("""
-    var links = Array.from(document.querySelectorAll('a.text-decoration-none, a[href*="/news/view/"]'));
+    var links = Array.from(document.querySelectorAll('a.text-decoration-none, a[href*="/news/view/"], a[href*="/news/"]'));
     var out = [];
     var seen = new Set();
     
     for (var a of links) {
-        if (!a.href || !a.href.includes('/news/view/')) continue;
+        if (!a.href || (!a.href.includes('/news/view/') && !a.href.includes('/news/'))) continue;
+        if (a.href.endsWith('/news/list/') || a.href.includes('/news/list/')) continue;
         if (seen.has(a.href)) continue;
         
         var titleEl = a.querySelector('div > div:nth-child(2) > div:nth-child(1)');
@@ -106,13 +111,38 @@ def get_page_articles(driver):
         var catEl = a.querySelector('label') || a.querySelector('div > div:nth-child(2) > div:nth-child(2) > div:nth-child(2)');
         
         var title = titleEl ? titleEl.innerText.trim() : '';
+        if (!title) {
+            var headings = a.querySelectorAll('h1, h2, h3, h4, h5, h6, [class*="title"], p');
+            for (var h of headings) {
+                if (h.innerText.trim().length > 3) {
+                    title = h.innerText.trim();
+                    break;
+                }
+            }
+            if (!title && a.innerText.trim()) {
+                var lines = a.innerText.trim().split('\\n').map(function(s){return s.trim();}).filter(Boolean);
+                if (lines.length > 0) title = lines[0];
+            }
+        }
         if (!title) continue;
+        
+        var rawDate = dateEl ? dateEl.innerText.trim() : '';
+        if (!rawDate) {
+            var dateCandidates = a.querySelectorAll('[class*="date"], small, time, span');
+            for (var d of dateCandidates) {
+                var txt = d.innerText.trim();
+                if (/\\d+/.test(txt) && (txt.includes('ก.พ.') || txt.includes('มี.ค.') || txt.includes('เม.ย.') || txt.includes('พ.ค.') || txt.includes('มิ.ย.') || txt.includes('ก.ค.') || txt.includes('ส.ค.') || txt.includes('ก.ย.') || txt.includes('ต.ค.') || txt.includes('พ.ย.') || txt.includes('ธ.ค.') || txt.includes('ม.ค.'))) {
+                    rawDate = txt;
+                    break;
+                }
+            }
+        }
         
         seen.add(a.href);
         out.push({
             url: a.href,
             title: title,
-            raw_date: dateEl ? dateEl.innerText.trim() : '',
+            raw_date: rawDate,
             raw_cat: catEl ? catEl.innerText.trim() : '-'
         });
     }
@@ -245,7 +275,16 @@ def main():
     
     try:
         print(f"Loading URL: {CATEGORY_URL}")
-        driver.get(CATEGORY_URL)
+        for attempt in range(3):
+            try:
+                driver.get(CATEGORY_URL)
+                break
+            except Exception as e:
+                if attempt < 2:
+                    print(f"Warning: Failed to load {CATEGORY_URL} ({e}). Retrying in 3 seconds...")
+                    time.sleep(3)
+                else:
+                    raise
         time.sleep(6)
         
         while True:
@@ -260,9 +299,45 @@ def main():
                 break
                 
             print(f"\n--- Scraping Page {page} ---")
-            articles = get_page_articles(driver)
+            articles = []
+            max_wait = 25 if page == 1 else 10
+            for w in range(max_wait):
+                articles = get_page_articles(driver)
+                if articles:
+                    break
+                time.sleep(1)
+                
             if not articles:
-                print("No articles found on page.")
+                # Try triggering Next.js router transition in case dynamic route did not decode
+                driver.execute_script("""
+                try {
+                    if (window.next && window.next.router) {
+                        window.next.router.push({
+                            pathname: '/thainews/news/list/[id]',
+                            query: { id: 'ล่าสุด' }
+                        });
+                    }
+                } catch(e) {}
+                """)
+                for _ in range(10):
+                    articles = get_page_articles(driver)
+                    if articles:
+                        break
+                    time.sleep(1)
+
+            if not articles:
+                print("No articles found on page after waiting.")
+                try:
+                    debug_url = driver.current_url
+                    debug_title = driver.title
+                    debug_body = driver.execute_script("return document.body ? document.body.innerText.slice(0, 200).replace(/\\n+/g, ' ') : ''")
+                    debug_next = driver.execute_script("return window.next ? (window.next.router ? JSON.stringify(window.next.router.query) : 'no router') : 'no next'")
+                    print(f"  [Debug] Current URL: {debug_url}")
+                    print(f"  [Debug] Title: {debug_title}")
+                    print(f"  [Debug] Next.js Router Query: {debug_next}")
+                    print(f"  [Debug] Page text snippet: {debug_body}")
+                except Exception as dbg_err:
+                    print(f"  [Debug error]: {dbg_err}")
                 break
                 
             new_articles = [art for art in articles if art["url"] not in scraped_urls]

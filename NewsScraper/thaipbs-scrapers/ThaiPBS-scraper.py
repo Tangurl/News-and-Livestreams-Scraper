@@ -3,11 +3,14 @@ import sys
 import csv
 import re
 import argparse
-import gspread
+try:
+    import gspread
+    from google.auth.transport.requests import Request
+    from google.oauth2.credentials import Credentials
+    from google_auth_oauthlib.flow import InstalledAppFlow
+except ImportError:
+    gspread = None
 from datetime import datetime, timedelta, timezone
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -23,6 +26,9 @@ SCOPES = [
 ]
 
 def connect_sheet(sheet_name):
+    if not gspread:
+        print("Note: gspread library not installed. Skipping direct Google Sheets sync from ThaiPBS-scraper.")
+        return None
     creds = None
     script_dir = os.path.dirname(os.path.abspath(__file__))
     token_path = os.path.join(script_dir, "token.json")

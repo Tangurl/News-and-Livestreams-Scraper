@@ -367,19 +367,32 @@ def run_single_scraper_worker(scraper_info, days=None, total_count=0, progress_t
         register_process(process)
         assign_process_to_job(process.pid)
         
-        for line in process.stdout:
-            if verbose:
-                safe_print(f"[{channel_name} | {category_name}] {line.rstrip()}")
-            output_lines.append(line)
-            
+        def _read_stdout():
+            try:
+                for line in iter(process.stdout.readline, ''):
+                    if not line:
+                        break
+                    if verbose:
+                        safe_print(f"[{channel_name} | {category_name}] {line.rstrip()}")
+                    output_lines.append(line)
+            except Exception:
+                pass
+
+        reader_t = threading.Thread(target=_read_stdout, daemon=True)
+        reader_t.start()
+        
+        timed_out = False
         try:
             if timeout_seconds and timeout_seconds > 0:
                 process.wait(timeout=timeout_seconds)
             else:
                 process.wait()
         except subprocess.TimeoutExpired:
+            timed_out = True
             kill_process_tree(process)
             output_lines.append(f"\n[Process Timed Out after {timeout_seconds} seconds]")
+            
+        reader_t.join(timeout=1.5)
             
         return_code = process.returncode
         full_output = "".join(output_lines)
@@ -401,9 +414,9 @@ def run_single_scraper_worker(scraper_info, days=None, total_count=0, progress_t
         failed = False
         error_msg = ""
         
-        if "[Process Timed Out" in full_output:
+        if timed_out or "[Process Timed Out" in full_output:
             failed = True
-            error_msg = "Timed out (180s)"
+            error_msg = f"Timed out ({timeout_seconds}s)"
         elif return_code != 0:
             failed = True
             error_msg = f"Exit code {return_code}"
