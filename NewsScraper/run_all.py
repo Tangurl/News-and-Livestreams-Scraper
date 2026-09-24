@@ -351,6 +351,7 @@ def run_single_scraper_worker(scraper_info, days=None, total_count=0, progress_t
     sub_env = os.environ.copy()
     sub_env["PYTHONIOENCODING"] = "utf-8"
     sub_env["PYTHONUTF8"] = "1"
+    sub_env["PYTHONPATH"] = WORKSPACE_DIR + (os.pathsep + sub_env["PYTHONPATH"] if "PYTHONPATH" in sub_env else "")
     try:
         process = subprocess.Popen(
             cmd,

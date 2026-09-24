@@ -80,7 +80,7 @@ def normalize_khaosod_date(raw_date):
         day = dt.day
         month_str = thai_months[dt.month - 1]
         be_year = dt.year + 543
-        time_str = dt.strftime("%H:%M น.")
+        time_str = f"{dt.strftime('%H:%M')} น."
         formatted = f"{day} {month_str} {be_year} {time_str}"
         return formatted, dt
         
@@ -91,7 +91,7 @@ def normalize_khaosod_date(raw_date):
         day = dt.day
         month_str = thai_months[dt.month - 1]
         be_year = dt.year + 543
-        time_str = dt.strftime("%H:%M น.")
+        time_str = f"{dt.strftime('%H:%M')} น."
         formatted = f"{day} {month_str} {be_year} {time_str}"
         return formatted, dt
         
@@ -102,7 +102,7 @@ def normalize_khaosod_date(raw_date):
         day = dt.day
         month_str = thai_months[dt.month - 1]
         be_year = dt.year + 543
-        time_str = dt.strftime("%H:%M น.")
+        time_str = f"{dt.strftime('%H:%M')} น."
         formatted = f"{day} {month_str} {be_year} {time_str}"
         return formatted, dt
 
@@ -114,7 +114,7 @@ def normalize_khaosod_date(raw_date):
         day = dt.day
         month_str = thai_months[dt.month - 1]
         be_year = dt.year + 543
-        time_str = dt.strftime("%H:%M น.")
+        time_str = f"{dt.strftime('%H:%M')} น."
         return f"{day} {month_str} {be_year} {time_str}", dt
 
     # Relative: เมื่อวานนี้
@@ -126,7 +126,7 @@ def normalize_khaosod_date(raw_date):
         day = dt.day
         month_str = thai_months[dt.month - 1]
         be_year = dt.year + 543
-        time_str = dt.strftime("%H:%M น.")
+        time_str = f"{dt.strftime('%H:%M')} น."
         return f"{day} {month_str} {be_year} {time_str}", dt
 
     # Absolute: e.g. '26 ส.ค. 2569' or '26 ส.ค. 2569 14:30 น.'

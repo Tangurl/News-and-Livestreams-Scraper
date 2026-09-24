@@ -274,7 +274,15 @@ def find_active_program_for_channel(
         return None
 
     if target_dt is None:
-        target_dt = datetime.now(ZoneInfo("Asia/Bangkok"))
+        try:
+            target_dt = datetime.now(ZoneInfo("Asia/Bangkok")).replace(tzinfo=None)
+        except Exception:
+            target_dt = datetime.now()
+    elif target_dt.tzinfo is not None:
+        try:
+            target_dt = target_dt.astimezone(ZoneInfo("Asia/Bangkok")).replace(tzinfo=None)
+        except Exception:
+            target_dt = target_dt.replace(tzinfo=None)
 
     # Parse and validate datetimes for each row
     parsed_items = []
