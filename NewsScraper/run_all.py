@@ -14,7 +14,39 @@ except ImportError:
     ZoneInfo = None
 
 
+import atexit
+import signal
+
 print_lock = threading.Lock()
+active_processes = set()
+active_processes_lock = threading.Lock()
+
+def register_process(p):
+    with active_processes_lock:
+        active_processes.add(p)
+
+def unregister_process(p):
+    with active_processes_lock:
+        active_processes.discard(p)
+
+def kill_process_tree(p):
+    """Forcefully kill process and all of its child processes (including chrome.exe/chromedriver.exe)."""
+    try:
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(p.pid)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            p.kill()
+    except Exception:
+        pass
+
+def kill_all_active_processes():
+    """Kills all currently running scraper child processes and their Chrome descendants."""
+    with active_processes_lock:
+        procs = list(active_processes)
+    for p in procs:
+        kill_process_tree(p)
+
+atexit.register(kill_all_active_processes)
 
 def safe_print(*args, **kwargs):
     """Thread-safe print function."""
@@ -109,10 +141,15 @@ SCRAPER_DIRS = [
     "workpointtoday-scrapers"
 ]
 
-def find_scrapers():
-    """Finds all python scraper scripts inside the configured directories."""
+def find_scrapers(channels=None):
+    """Finds all python scraper scripts inside the configured directories, optionally filtered by channel."""
     scrapers = []
+    filter_keys = [c.strip().lower().replace("-scrapers", "").replace("-", "") for c in channels] if channels else None
     for s_dir in SCRAPER_DIRS:
+        if filter_keys:
+            dir_clean = s_dir.replace("-scrapers", "").replace("-", "").lower()
+            if not any(fk in dir_clean for fk in filter_keys):
+                continue
         dir_path = os.path.join(WORKSPACE_DIR, s_dir)
         if os.path.isdir(dir_path):
             for f in sorted(os.listdir(dir_path)):
@@ -174,6 +211,7 @@ def run_single_scraper_worker(scraper_info, days=None, total_count=0, progress_t
         cmd.extend(["-d", str(days)])
         
     output_lines = []
+    process = None
     try:
         process = subprocess.Popen(
             cmd,
@@ -183,6 +221,7 @@ def run_single_scraper_worker(scraper_info, days=None, total_count=0, progress_t
             text=True,
             bufsize=1
         )
+        register_process(process)
         
         for line in process.stdout:
             if verbose:
@@ -195,8 +234,7 @@ def run_single_scraper_worker(scraper_info, days=None, total_count=0, progress_t
             else:
                 process.wait()
         except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait()
+            kill_process_tree(process)
             output_lines.append(f"\n[Process Timed Out after {timeout_seconds} seconds]")
             
         return_code = process.returncode
@@ -247,6 +285,10 @@ def run_single_scraper_worker(scraper_info, days=None, total_count=0, progress_t
                 
         if failed:
             safe_print(f"[{fin_idx}/{total_count}] ❌ FAILED: {channel_name} - {category_name} ({error_msg})")
+            if not verbose and output_lines:
+                err_lines = [l.strip() for l in output_lines if l.strip()]
+                for el in err_lines[-2:]:
+                    safe_print(f"   ↳ {el}")
             status_str = f"FAILED ({error_msg})"
             success = False
         else:
@@ -280,6 +322,9 @@ def run_single_scraper_worker(scraper_info, days=None, total_count=0, progress_t
             "total_count": count_csv_rows(csv_path),
             "log": str(e)
         }
+    finally:
+        if process:
+            unregister_process(process)
 
 # Option A: Strict Standard Category Normalization (6 Core Categories + อื่นๆ)
 CATEGORY_NORMALIZATION = {
@@ -755,7 +800,7 @@ def sleep_until(target_dt: datetime, poll_interval: float = 5.0) -> None:
             break
         time.sleep(min(remaining, poll_interval))
 
-def run_pipeline(days=None, concurrency=10, verbose=False, timeout_seconds=300, merge_only=False, skip_gsheet=False, sheet_id=None):
+def run_pipeline(days=None, channels=None, concurrency=10, verbose=False, timeout_seconds=300, merge_only=False, skip_gsheet=False, sheet_id=None):
     """Executes a single end-to-end run of the scraping and merging pipeline."""
     start_time = time.time()
     
@@ -768,13 +813,13 @@ def run_pipeline(days=None, concurrency=10, verbose=False, timeout_seconds=300, 
         return
         
     # 1. Discover scrapers
-    scrapers = find_scrapers()
+    scrapers = find_scrapers(channels)
     print(f"Discovered {len(scrapers)} scraper scripts:")
     for s in scrapers:
         print(f"  - {os.path.relpath(s, WORKSPACE_DIR)}")
         
     if not scrapers:
-        print("No scraper scripts found. Stopping.")
+        print("No scraper scripts found matching criteria. Stopping.")
         return
         
     # Channel and category mappings for table
@@ -893,8 +938,15 @@ def run_pipeline(days=None, concurrency=10, verbose=False, timeout_seconds=300, 
                 executor.submit(run_single_scraper_worker, st, scraper_days, total_tasks, progress_tracker, verbose=verbose, timeout_seconds=timeout_seconds)
                 for st in scraper_tasks
             ]
-            for future in concurrent.futures.as_completed(futures):
-                results.append(future.result())
+            try:
+                for future in concurrent.futures.as_completed(futures):
+                    results.append(future.result())
+            except KeyboardInterrupt:
+                for f in futures:
+                    f.cancel()
+                kill_all_active_processes()
+                executor.shutdown(wait=False, cancel_futures=True)
+                raise
                 
     # Sort results by channel and category for neat table display
     results.sort(key=lambda r: (r["channel"], r["category"]))
@@ -958,6 +1010,12 @@ def main():
         default=None,
         help="Designated daily time to run in a loop (e.g., '09:00' or '09:00:00' in Asia/Bangkok). Runs once immediately, then waits for the designated time to repeat."
     )
+    parser.add_argument(
+        "-ch", "--channel", "--channels",
+        type=str,
+        default=None,
+        help="Scrape only specific channel(s), comma-separated (e.g. 'thaipbs' or 'thaipbs,thairath,ch7')"
+    )
     args = parser.parse_args()
     days = args.days
     concurrency = max(1, args.concurrency)
@@ -965,6 +1023,10 @@ def main():
     merge_only = args.merge_only
     skip_gsheet = args.no_sheet
     sheet_id = args.sheet_id
+    
+    channels = None
+    if args.channel:
+        channels = [c.strip().lower() for c in args.channel.split(",") if c.strip()]
     
     # Auto-scale timeout based on days if not explicitly specified
     if args.timeout is not None:
@@ -984,6 +1046,7 @@ def main():
         # Initial run
         run_pipeline(
             days=days,
+            channels=channels,
             concurrency=concurrency,
             verbose=verbose,
             timeout_seconds=timeout_seconds,
@@ -1022,6 +1085,7 @@ def main():
 
             run_pipeline(
                 days=days,
+                channels=channels,
                 concurrency=concurrency,
                 verbose=verbose,
                 timeout_seconds=timeout_seconds,
@@ -1031,8 +1095,10 @@ def main():
             )
 
     except KeyboardInterrupt:
-        print("\n\n🛑 Execution stopped by user. Exiting cleanly.")
-        sys.exit(0)
+        print("\n\n🛑 Execution stopped by user. Cleaning up background scrapers and Chrome processes...")
+        kill_all_active_processes()
+        print("Cleanup complete. Exiting.")
+        os._exit(0)
 
 if __name__ == "__main__":
     main()
