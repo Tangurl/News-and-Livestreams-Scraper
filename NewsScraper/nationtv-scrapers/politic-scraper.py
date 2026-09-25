@@ -3,6 +3,7 @@ import re
 import csv
 import time
 import argparse
+import urllib.request
 from datetime import datetime, timezone, timedelta
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -118,6 +119,37 @@ def get_page_articles(driver):
 
 def get_article_detail_info(url, max_retries=3):
     """Visits the NationTV article detail page and extracts exact headline and published date."""
+    # Fast path: fetch HTML directly via HTTP (takes ~50ms instead of 4s Chrome launch)
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            html = response.read().decode('utf-8', errors='ignore')
+            h1_match = re.search(r'<h1[^>]*>(.*?)</h1>', html, re.DOTALL)
+            title = re.sub(r'<[^>]+>', '', h1_match.group(1)).strip() if h1_match else ""
+            
+            # Priority 1: Check JSON-LD datePublished (contains exact ISO datetime with real time)
+            m_iso = re.search(r'\"datePublished\":\s*\"([^\"]+)\"', html)
+            if m_iso:
+                try:
+                    dt_obj = datetime.fromisoformat(m_iso.group(1))
+                    thai_months = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]
+                    be_year = dt_obj.year + 543
+                    time_str = dt_obj.strftime("%H:%M")
+                    formatted_date = f"{dt_obj.day} {thai_months[dt_obj.month - 1]} {be_year} {time_str} น."
+                    return title, formatted_date, dt_obj
+                except Exception:
+                    pass
+
+            # Priority 2: Visible text date
+            date_match = re.search(r'(\d{1,2}\s+[ก-๙\.]+\s+\d{2,4}(?:\s*\|\s*\d{1,2}[:\.]\d{2}\s*น\.)?)', html)
+            if date_match:
+                date_str = date_match.group(1).strip()
+                formatted_date, dt_obj = normalize_nationtv_date(date_str)
+                if dt_obj:
+                    return title, formatted_date, dt_obj
+    except Exception:
+        pass
+
     for attempt in range(max_retries):
         driver = None
         try:
@@ -241,13 +273,22 @@ def main():
         time.sleep(5)
         
         # Paginate via infinite scroll until max_pages or cutoff
-        should_paginate = (max_pages is not None and max_pages > 1) or (max_pages is None and start_date is not None)
+        if max_pages is not None:
+            max_auto_pages = max_pages
+        elif max_days is not None:
+            days_count = abs(max_days)
+            max_auto_pages = 5 if days_count <= 2 else min(days_count * 3, 15)
+        else:
+            max_auto_pages = 5
+
+        should_paginate = max_auto_pages > 1
         while should_paginate:
-            if max_pages is not None and page >= max_pages:
+            if page >= max_auto_pages:
+                print(f"Reached pagination limit of {max_auto_pages} pages. Proceeding to extract articles.")
                 break
                 
             initial_count = len(get_page_articles(driver))
-            print(f"Scrolling down for more articles - page {page + 1}/{max_pages or 'auto'}...")
+            print(f"Scrolling down for more articles - page {page + 1}/{max_auto_pages}...")
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             time.sleep(3)
             
@@ -263,6 +304,7 @@ def main():
         new_articles = [art for art in articles if art["url"] not in scraped_urls]
         print(f"\nFound {len(articles)} total articles on page (newly discovered: {len(new_articles)}).")
         
+        consecutive_old = 0
         for idx, art in enumerate(new_articles):
             art_url = art["url"]
             list_title = art["title"]
@@ -274,12 +316,26 @@ def main():
             title = detail_title or list_title
             print(f"    Date: {date_posted} | Title: {title}")
             
+            # Normalize timezone awareness if comparing
+            if date_obj is not None and start_date is not None:
+                if date_obj.tzinfo is None and start_date.tzinfo is not None:
+                    date_obj = date_obj.replace(tzinfo=start_date.tzinfo)
+                elif date_obj.tzinfo is not None and start_date.tzinfo is None:
+                    date_obj = date_obj.replace(tzinfo=None)
+
             # Check start date cutoff
             if start_date is not None and date_obj is not None:
                 if date_obj < start_date:
-                    print(f"    Article date ({date_obj}) is older than start date ({start_date}). Stopping.")
-                    hit_cutoff = True
-                    break
+                    consecutive_old += 1
+                    if consecutive_old >= 5:
+                        print(f"    Reached {consecutive_old} consecutive articles older than start date ({start_date}). Stopping.")
+                        hit_cutoff = True
+                        break
+                    else:
+                        print(f"    Article date ({date_obj}) is older than start date ({start_date}). Skipping ({consecutive_old}/5).")
+                        continue
+                else:
+                    consecutive_old = 0
                     
             # Check end date cutoff
             if end_date is not None and date_obj is not None:
