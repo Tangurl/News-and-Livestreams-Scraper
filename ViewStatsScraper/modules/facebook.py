@@ -20,9 +20,11 @@ from modules.utilities import (
     FACEBOOK_PROFILE_DIR,
     THAI_MONTH_REGEX,
     create_stealth_chrome_driver,
+    get_facebook_profile_cookies_mtime,
     gregorian_year_to_be_short,
     is_facebook_blocked_this_round,
     is_facebook_logged_out,
+    is_manual_login_in_progress,
     normalize_title_text,
     parse_thai_date_match,
     reset_facebook_blocked_status,
@@ -38,8 +40,13 @@ COMMON_STOPWORDS = {
 }
 
 
-# ชื่อไฟล์ Config สำหรับกำหนดช่องหรือรายการที่ต้องใช้ Facebook Login
+# ไฟล์ Config สำหรับเปิด/ปิดการใช้บัญชี Facebook Login ทั้งหมด ('enabled': false เพื่อพักบัญชี)
 FACEBOOK_LOGIN_TARGETS_FILE = "facebook_login_targets.json"
+
+# เพจ Facebook ที่ต้องใช้บัญชีที่ล็อกอินไว้ถึงจะเห็น Live (จับคู่แบบ substring กับ <x> ใน
+# https://www.facebook.com/watch/<x>/ หลัง lower().strip()) ใช้ URL เป็นเกณฑ์แทนชื่อช่อง/ชื่อรายการ
+# เพราะรายการที่ทำ broadcast override (เช่น โหนกระแส -> watch/HKS2017/) สุดท้ายก็ต้องเปิดผ่าน URL อยู่ดี
+FACEBOOK_LOGIN_PAGE_KEYWORDS = ("thaipbs", "thairath", "hks2017", "one")
 
 _CACHED_LOGIN_TARGETS: Optional[Dict] = None
 _CACHED_LOGIN_TARGETS_MTIME: float = 0.0
@@ -72,9 +79,8 @@ def is_all_facebook_login_disabled() -> bool:
 
 def load_facebook_login_targets(reload: bool = False) -> Dict:
     """
-    โหลดการตั้งค่าช่อง/รายการที่ต้องใช้ Facebook Login จาก facebook_login_targets.json
+    โหลดการตั้งค่า facebook_login_targets.json (ปัจจุบันใช้เฉพาะ 'enabled')
     มีระบบตรวจจับการแก้ไขไฟล์อัตโนมัติ (mtime) ทำให้การแก้ไขไฟล์มีผลทันที
-    หากไม่พบไฟล์ จะใช้ค่า Default: Thai PBS, Thairath TV, ONE และรายการ โหนกระแส
     """
     global _CACHED_LOGIN_TARGETS, _CACHED_LOGIN_TARGETS_MTIME
 
@@ -100,25 +106,16 @@ def load_facebook_login_targets(reload: bool = False) -> Dict:
     if _CACHED_LOGIN_TARGETS is not None and not reload:
         return _CACHED_LOGIN_TARGETS
 
-    _CACHED_LOGIN_TARGETS = {
-        "enabled": False,
-        "channels": ["Thai PBS", "Thairath TV", "ONE"],
-        "broadcasts": ["โหนกระแส"]
-    }
+    _CACHED_LOGIN_TARGETS = {"enabled": True}
     return _CACHED_LOGIN_TARGETS
 
 
-def should_use_facebook_login(
-    channel_name: Optional[str] = None,
-    program_titles: Optional[List[str]] = None,
-    page_url: Optional[str] = None
-) -> Tuple[bool, str]:
+def should_use_facebook_login(page_url: Optional[str]) -> Tuple[bool, str]:
     """
-    ตรวจสอบว่าช่อง รายการ หรือ URL เพจนี้ ต้องใช้บัญชี Facebook ที่ล็อกอินไว้หรือไม่
-    ตามเงื่อนไขใน facebook_login_targets.json (Default: ThaiPBS, Thairath TV, ONE, โหนกระแส)
+    ตรวจสอบว่าเพจนี้ต้องใช้บัญชี Facebook ที่ล็อกอินไว้หรือไม่ จาก <x> ใน
+    https://www.facebook.com/watch/<x>/ ตาม FACEBOOK_LOGIN_PAGE_KEYWORDS
     คืนค่า (is_required, reason)
     """
-    # 0. ตรวจสอบเงื่อนไขปิดการล็อกอินทั้งหมด (Global Disable)
     if _GLOBAL_DISABLE_FACEBOOK_LOGIN:
         return False, "ปิดการใช้งานบัญชี Login ทั้งหมดผ่านคำสั่ง (--no-facebook-login)"
 
@@ -129,43 +126,23 @@ def should_use_facebook_login(
     if cfg.get("enabled") is False or cfg.get("use_login") is False:
         return False, "ปิดการใช้งานบัญชี Login ทั้งหมดใน facebook_login_targets.json (enabled: false)"
 
-    target_channels = [re.sub(r"[\s_\-]", "", str(c or "").lower()) for c in cfg.get("channels", []) if c]
-    target_broadcasts = [str(b).strip() for b in cfg.get("broadcasts", []) if b]
+    page_name = (extract_facebook_page_name(page_url or "") or "").lower().strip()
+    for kw in FACEBOOK_LOGIN_PAGE_KEYWORDS:
+        if kw in page_name:
+            return True, f"เพจ 'watch/{page_name}/' ตรงกับ '{kw}' ที่ต้องใช้บัญชี Login"
 
-    # 1. ตรวจสอบชื่อช่อง (Channel Name)
-    if channel_name:
-        ch_norm = re.sub(r"[\s_\-]", "", str(channel_name).lower())
-        for tc in target_channels:
-            if tc in ch_norm or ch_norm in tc:
-                return True, f"ช่อง '{channel_name}' อยู่ในรายการที่ต้องใช้บัญชี Login"
-
-    # 2. ตรวจสอบชื่อรายการ (Broadcast Titles) เช่น 'โหนกระแส'
-    if program_titles:
-        for t in program_titles:
-            t_str = str(t)
-            for tb in target_broadcasts:
-                if tb in t_str:
-                    return True, f"รายการ '{tb}' อยู่ในรายการที่ต้องใช้บัญชี Login"
-
-    # 3. ตรวจสอบจาก URL ของเพจ (Fallback หากไม่ระบุ channel_name)
-    if page_url:
-        u_norm = re.sub(r"[\s_\-]", "", str(page_url).lower())
-        for tc in target_channels:
-            if tc in u_norm:
-                return True, f"เพจ '{tc}' อยู่ในรายการที่ต้องใช้บัญชี Login"
-
-    return False, "ไม่อยู่ในเงื่อนไขที่ต้องล็อกอิน (ใช้ Clean Session)"
+    return False, f"เพจ 'watch/{page_name}/' ไม่อยู่ในเงื่อนไขที่ต้องล็อกอิน (ใช้ Clean Session)"
 
 
-def create_driver(headless: bool = True, force_clean: bool = False) -> webdriver.Chrome:
+def create_driver(headless: bool = True, use_profile: bool = False) -> webdriver.Chrome:
     """
     สร้างและตั้งค่า Selenium Chrome WebDriver พร้อม Stealth Arguments (สำหรับ Facebook)
-    - หาก force_clean=True หรือตรวจพบว่าบัญชี Facebook ติด Action Block หรือหลุด Login หรือสั่งปิด Facebook Login ทั้งหมด จะเปิดเป็น Clean Session ทันที
-    - นอกเหนือจากนั้น จะใช้ Profile ที่ล็อกอินไว้ตามปกติ
+    - use_profile=True: คัดลอก Session จาก Chrome Profile ที่ล็อกอินไว้มาใช้
+      (ข้ามให้อัตโนมัติหากบัญชีติด Action Block / หลุด Login / สั่งปิด Facebook Login ทั้งหมด)
+    - use_profile=False: Clean Session (Guest)
     """
-    if force_clean or is_facebook_blocked_this_round() or is_all_facebook_login_disabled() or is_facebook_logged_out():
-        return create_stealth_chrome_driver(headless=headless, skip_facebook_profile=True)
-    return create_stealth_chrome_driver(headless=headless)
+    use_profile = use_profile and not is_all_facebook_login_disabled()
+    return create_stealth_chrome_driver(headless=headless, use_facebook_profile=use_profile)
 
 
 def dismiss_login_popup(driver: webdriver.Chrome, debug_screenshot_path: Optional[str] = None):
@@ -766,6 +743,8 @@ def extract_facebook_page_name(url: str) -> Optional[str]:
 
 _AUTO_LOGIN_LOCK = threading.Lock()
 _LAST_AUTO_LOGIN_ATTEMPT: float = 0.0
+# เวลาที่ Auto Re-Login รอบล่าสุดปิด Chrome เสร็จ (Cookies ที่เขียนก่อนเวลานี้ไม่นับเป็นการ Login ใหม่)
+_LAST_AUTO_LOGIN_FINISHED: float = 0.0
 _LATEST_AUTH_COOKIES: List[Dict] = []
 
 
@@ -790,15 +769,21 @@ def _human_type(element, text: str, min_delay: float = 0.03, max_delay: float = 
 
 def attempt_facebook_auto_relogin(force: bool = False) -> bool:
     """
-    พยายามเข้าสู่ระบบ Facebook อัตโนมัติด้วยข้อมูลประจำตัวจาก .env
+    พยายามเข้าสู่ระบบ Facebook อัตโนมัติด้วยข้อมูลประจำตัวจาก .env (FB_EMAIL / FB_PASSWORD)
     ดำเนินการผ่าน Master Chrome Profile (FACEBOOK_PROFILE_DIR) เพื่อบันทึก Session ไว้ถาวร
     รองรับทั้งกรณีฟอร์มเต็ม (Email + Password) และกรณี Continue/Recent Logins (ต้องการเฉพาะ Password)
     """
-    global _LAST_AUTO_LOGIN_ATTEMPT, _LATEST_AUTH_COOKIES
+    global _LAST_AUTO_LOGIN_ATTEMPT, _LAST_AUTO_LOGIN_FINISHED, _LATEST_AUTH_COOKIES
 
     email = os.getenv("FB_EMAIL", "").strip()
     password = os.getenv("FB_PASSWORD", "").strip()
     if not password:
+        return False
+
+    # login_facebook.py กำลังเปิด Chrome ด้วย FACEBOOK_PROFILE_DIR อยู่ ห้ามเปิด Chrome ด้วย Profile เดียวกันซ้อน
+    # (_clear_stale_profile_locks() จะ kill หน้าต่างที่ผู้ใช้กำลัง Login ทิ้ง)
+    if is_manual_login_in_progress():
+        print("  ⏳ [Facebook Auto-Login] มีหน้าต่าง Login ด้วยตนเองเปิดอยู่ ข้ามการล็อกอินอัตโนมัติ")
         return False
 
     cooldown_min = 30
@@ -828,8 +813,7 @@ def attempt_facebook_auto_relogin(force: bool = False) -> bool:
         try:
             driver = create_stealth_chrome_driver(
                 headless=headless_login,
-                profile_dir=FACEBOOK_PROFILE_DIR,
-                skip_facebook_profile=False
+                profile_dir=FACEBOOK_PROFILE_DIR
             )
             driver.set_page_load_timeout(35)
 
@@ -1006,12 +990,12 @@ def attempt_facebook_auto_relogin(force: bool = False) -> bool:
             # 3.1 ตรวจจับ Captcha / 2FA / Checkpoint (ตรวจจาก visible text และ URL ไม่ตรวจ page_source เพื่อเลี่ยง false positive จาก minified JS)
             if any(k in after_url for k in ("/checkpoint", "/recover", "two_factor", "approvals_code")):
                 print(f"\n  ⚠️ [Facebook Auto-Login Failed] Facebook ต้องการการยืนยันตัวตนเพิ่มเติม (Checkpoint / 2FA / OTP)")
-                print(f"  👉 กรุณารันคำสั่ง: python login_facebook.py เพื่อกดยืนยันตัวตนด้วยตนเองในหน้าต่างเบราว์เซอร์\n")
+                print(f"  👉 กรุณารัน Login.bat ที่ root เพื่อกดยืนยันตัวตนด้วยตนเองในหน้าต่างเบราว์เซอร์\n")
                 return False
 
             if any(k in visible_body_text for k in ("security check", "ยืนยันความปลอดภัย", "enter code", "ป้อนรหัส", "captcha")):
                 print(f"\n  ⚠️ [Facebook Auto-Login Failed] Facebook แสดงหน้าต่าง Captcha หรือ Security Check")
-                print(f"  👉 กรุณารันคำสั่ง: python login_facebook.py เพื่อผ่านการทดสอบ\n")
+                print(f"  👉 กรุณารัน Login.bat ที่ root เพื่อผ่านการทดสอบด้วยตนเอง\n")
                 return False
 
             # 3.2 ตรวจสอบความสำเร็จ (มี c_user และ xs หรือมี Profile Avatar)
@@ -1049,17 +1033,39 @@ def attempt_facebook_auto_relogin(force: bool = False) -> bool:
                     driver.quit()
                 except Exception:
                     pass
+            _LAST_AUTO_LOGIN_FINISHED = time.time()
 
 
 _WARNED_LOGGED_OUT_THIS_RUN = False
+
+_LOGGED_OUT_AT: float = 0.0
+
+
+def maybe_restore_facebook_session() -> None:
+    """
+    หากก่อนหน้านี้ตรวจพบว่าหลุด Login ให้กลับมาใช้บัญชีที่ล็อกอินไว้อีกครั้งเมื่อ
+    - ผู้ใช้รัน Login.bat ใหม่แล้ว (ไฟล์ Cookies ใน Profile หลักถูกแก้ไขหลังเวลาที่หลุด และไม่มีหน้าต่าง Login ค้างอยู่) หรือ
+    - Auto Re-Login ด้วย .env สำเร็จ (ลองซ้ำได้ทุกครั้งที่พ้น FB_LOGIN_COOLDOWN_MINUTES เพราะระหว่างหลุด
+      crawler ใช้ Guest จึงไม่ผ่าน check_and_handle_logged_out() ที่เป็นตัวเรียก Auto Re-Login ตามปกติ)
+    """
+    if not is_facebook_logged_out() or is_manual_login_in_progress():
+        return
+    if get_facebook_profile_cookies_mtime() > max(_LOGGED_OUT_AT, _LAST_AUTO_LOGIN_FINISHED):
+        print("  ✨ [Facebook Session] ตรวจพบ Session ใหม่ใน Chrome Profile กลับมาใช้บัญชีที่ล็อกอินไว้")
+        reset_facebook_logged_out_status()
+        reset_facebook_blocked_status()
+        return
+    if is_facebook_auto_login_configured():
+        attempt_facebook_auto_relogin()
 
 
 def check_and_handle_logged_out(driver: webdriver.Chrome, target_url: str, auto_relogin: bool = True) -> bool:
     """
     ตรวจสอบว่าบัญชี Facebook หลุดการล็อกอิน (Session Expired, Checkpoint, หรือขึ้นหน้า 'Continue as...') หรือไม่
-    หากหลุด จะแจ้งเตือนผู้ใช้ให้รัน login_facebook.py และสลับเป็น Clean Session ในรอบนี้อัตโนมัติ
+    หากหลุด จะลอง Auto Re-Login ด้วย FB_EMAIL / FB_PASSWORD ใน .env ถ้าไม่สำเร็จจะแจ้งให้รัน Login.bat
+    และสลับเป็น Clean Session จนกว่าจะ Login ใหม่สำเร็จ
     """
-    global _WARNED_LOGGED_OUT_THIS_RUN, _LATEST_AUTH_COOKIES
+    global _WARNED_LOGGED_OUT_THIS_RUN, _LATEST_AUTH_COOKIES, _LOGGED_OUT_AT
     try:
         current_url = driver.current_url.lower()
         title_lower = driver.title.lower() if driver.title else ""
@@ -1216,10 +1222,11 @@ def check_and_handle_logged_out(driver: webdriver.Chrome, target_url: str, auto_
                 print("\n  ==================================================================")
                 print(f"  ⚠️ [Facebook Session Logged Out] บัญชี Facebook ของคุณหลุดการล็อกอิน!")
                 print(f"  🔍 สาเหตุ: {reason}")
-                print(f"  👉 กรุณารันคำสั่ง: python login_facebook.py เพื่อเข้าสู่ระบบ Facebook ใหม่อีกครั้ง")
+                print(f"  👉 กรุณารัน Login.bat ที่ root เพื่อเข้าสู่ระบบ Facebook ใหม่อีกครั้ง (หรือตั้ง FB_EMAIL / FB_PASSWORD ใน .env)")
                 print(f"  💡 สลับเป็นโหมด Clean Session (เหมือน Incognito) ให้อัตโนมัติ เพื่อให้ crawler ยังทำงานต่อไปได้")
                 print("  ==================================================================\n")
                 _WARNED_LOGGED_OUT_THIS_RUN = True
+                _LOGGED_OUT_AT = time.time()
                 set_facebook_logged_out(True)
                 set_facebook_blocked_this_round(True)
 
@@ -1288,26 +1295,25 @@ def scrape_live_videos(
     page_url: str = "https://www.facebook.com/watch/ThaiPBS/",
     max_scrolls: int = 20,
     load_wait_seconds: int = 5,
-    debug: bool = False,
     check_fallback: bool = True,
     channel_name: Optional[str] = None,
     program_titles: Optional[List[str]] = None
 ) -> List[Dict[str, str]]:
     """
     Crawl ข้อมูลวิดีโอจาก Facebook:
-    1. ตรวจสอบความจำเป็นในการใช้ Session ล็อกอินจาก facebook_login_targets.json
+    1. ตรวจสอบความจำเป็นในการใช้ Session ล็อกอินจาก URL เพจ (FACEBOOK_LOGIN_PAGE_KEYWORDS)
     2. ตรวจสอบหน้า Timeline ของเพจ (https://www.facebook.com/<PageName>/)
     3. ตรวจสอบหน้า Watch Grid / Videos
     4. Fallback ไปยัง live_videos เมื่อจำเป็น
+    (channel_name / program_titles ไม่ได้ใช้ตัดสินการ Login แล้ว คงไว้เพื่อความเข้ากันได้กับผู้เรียก)
     """
-    need_login, login_reason = should_use_facebook_login(
-        channel_name=channel_name,
-        program_titles=program_titles,
-        page_url=page_url
-    )
+    need_login, login_reason = should_use_facebook_login(page_url)
+    if need_login:
+        maybe_restore_facebook_session()
+    use_profile = need_login and not is_facebook_logged_out() and not is_facebook_blocked_this_round()
     if need_login:
         if is_facebook_logged_out():
-            print(f"  ⚠️ [Facebook Session] บัญชี Facebook หลุดการล็อกอิน -> สลับใช้ Clean Session Guest แทน (รัน 'python login_facebook.py' เพื่อเข้าสู่ระบบ)")
+            print(f"  ⚠️ [Facebook Session] บัญชี Facebook หลุดการล็อกอิน -> สลับใช้ Clean Session Guest แทน (รัน Login.bat ที่ root เพื่อเข้าสู่ระบบ)")
         elif is_facebook_blocked_this_round():
             print(f"  ⚠️ [Facebook Session] บัญชี Facebook ติด Action Block ในรอบนี้ -> สลับใช้ Clean Session Guest แทน")
         else:
@@ -1315,7 +1321,7 @@ def scrape_live_videos(
     else:
         print(f"  👤 [Facebook Session] ใช้ Clean Session Guest ({login_reason})")
 
-    driver = create_driver(headless=True, force_clean=(not need_login))
+    driver = create_driver(headless=True, use_profile=use_profile)
     video_dict: Dict[str, Dict[str, object]] = {}
 
     try:
@@ -1332,7 +1338,7 @@ def scrape_live_videos(
                 try:
                     driver.get(timeline_url)
                     time.sleep(load_wait_seconds)
-                    if need_login:
+                    if use_profile:
                         if not check_and_handle_logged_out(driver, timeline_url):
                             check_and_handle_temporarily_blocked(driver, timeline_url)
                             dismiss_login_popup(driver)
@@ -1347,13 +1353,12 @@ def scrape_live_videos(
         driver.get(primary_url)
         print(f"[Facebook Crawler] รอให้หน้าเว็บโหลดเนื้อหา ({load_wait_seconds} วินาที)...")
         time.sleep(max(3, load_wait_seconds - 1))
-        debug_shot_path = os.path.join(os.getcwd(), "debug_facebook_after_close.png") if debug else None
-        if need_login:
+        if use_profile:
             if not check_and_handle_logged_out(driver, primary_url):
                 check_and_handle_temporarily_blocked(driver, primary_url)
-                dismiss_login_popup(driver, debug_screenshot_path=debug_shot_path)
+                dismiss_login_popup(driver)
         else:
-            dismiss_login_popup(driver, debug_screenshot_path=debug_shot_path)
+            dismiss_login_popup(driver)
 
         _extract_videos_from_current_page(driver, video_dict, max_scrolls=max_scrolls)
 
@@ -1366,7 +1371,7 @@ def scrape_live_videos(
                 try:
                     driver.get(alt_url)
                     time.sleep(max(3, load_wait_seconds - 1))
-                    if need_login:
+                    if use_profile:
                         if not check_and_handle_logged_out(driver, alt_url):
                             check_and_handle_temporarily_blocked(driver, alt_url)
                             dismiss_login_popup(driver)

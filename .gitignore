@@ -67,6 +67,7 @@ Singleton*
 *.log
 **/logs/
 debug_*.png
+manual_login.lock
 error.png
 example.png
 
@@ -103,3 +104,5 @@ ehthumbs.db
 
 # Extras
 config.js
+claude.md
+Claude.md

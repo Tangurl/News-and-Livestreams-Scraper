@@ -6,6 +6,7 @@ import sys
 import tempfile
 import time
 import uuid
+from contextlib import contextmanager
 from typing import Optional, Tuple
 
 try:
@@ -30,9 +31,9 @@ for _stream in (sys.stdout, sys.stderr):
             pass
 
 # ไดเรกทอรีเก็บ Chrome User Profile ที่ล็อกอิน Facebook ค้างไว้ (สร้าง/ล้างข้อมูลผ่าน
-# login_facebook.py / logout_facebook.py) ใช้ร่วมกันทุกโมดูลที่เรียก
-# create_stealth_chrome_driver() (facebook.py, x.py, youtube.py) เพื่อให้เห็นวิดีโอ Live ที่
-# ต้องล็อกอินบัญชี Facebook ก่อนถึงจะดูได้
+# CredentialsUtility/login_facebook.py / logout_facebook.py) ใช้เฉพาะ facebook.py ตอน crawl เพจที่
+# ต้องล็อกอินบัญชี Facebook ก่อนถึงจะเห็นวิดีโอ Live (ส่ง use_facebook_profile=True เข้า
+# create_stealth_chrome_driver()) ส่วน youtube.py / x.py ไม่ใช้ Profile นี้
 #
 # ตั้งใจเก็บไว้นอกโฟลเดอร์โปรเจกต์ (เช่น %LOCALAPPDATA%\LinkScraperAutomate บน Windows) แทนที่จะ
 # เก็บไว้ใต้ตัวโปรเจกต์เอง เพราะโปรเจกต์นี้มักถูก clone ไว้ใต้ Desktop\...\WB-07-LinkScraperAutomate
@@ -53,6 +54,11 @@ CHROME_DATA_DIR = os.path.join(
     "LinkScraperAutomate",
 )
 FACEBOOK_PROFILE_DIR = os.path.join(CHROME_DATA_DIR, "facebook_profile")
+
+# ไฟล์ Lock ที่ CredentialsUtility/login_facebook.py สร้างไว้ระหว่างรอผู้ใช้ Login (เก็บ PID ไว้ข้างใน)
+# ให้ crawler รู้ว่ามีหน้าต่าง Login เปิดค้างอยู่ จะได้ไม่เปิดซ้อน และไม่เปิด Chrome ด้วย
+# FACEBOOK_PROFILE_DIR ไปชน (_clear_stale_profile_locks() จะ kill หน้าต่าง Login ทิ้ง)
+MANUAL_LOGIN_LOCK_FILE = os.path.join(CHROME_DATA_DIR, "manual_login.lock")
 
 # ไฟล์ Lock ที่ Chrome สร้างไว้ระหว่างใช้ Profile นี้อยู่ (กลไกนี้เป็นของ Linux/Mac เท่านั้น
 # Windows ไม่สร้างไฟล์เหล่านี้ แต่ยังคงลบทิ้งไว้เผื่อรันข้าม OS) หาก Chrome ปิดไม่สนิท (ปิดหน้าต่าง
@@ -102,6 +108,75 @@ def reset_facebook_logged_out_status() -> None:
     """รีเซ็ตสถานะการหลุดล็อกอิน (เช่น เมื่อผู้ใช้ล็อกอินใหม่แล้ว)"""
     global _FACEBOOK_LOGGED_OUT_STATUS
     _FACEBOOK_LOGGED_OUT_STATUS = False
+
+
+def _is_pid_alive(pid: int) -> bool:
+    if os.name == "nt":
+        # os.kill(pid, 0) บน Windows คือ TerminateProcess จึงต้องเช็คผ่าน WinAPI แทน
+        import ctypes
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        STILL_ACTIVE = 259
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            return False
+        try:
+            exit_code = ctypes.c_ulong()
+            ok = kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code))
+            return bool(ok) and exit_code.value == STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
+@contextmanager
+def manual_login_lock():
+    """ประกาศว่ากำลังรอผู้ใช้ Login ด้วยตนเองอยู่ (ใช้ครอบช่วงเปิด Chrome ใน login_facebook.py)"""
+    os.makedirs(CHROME_DATA_DIR, exist_ok=True)
+    with open(MANUAL_LOGIN_LOCK_FILE, "w", encoding="utf-8") as f:
+        f.write(str(os.getpid()))
+    try:
+        yield
+    finally:
+        try:
+            os.remove(MANUAL_LOGIN_LOCK_FILE)
+        except OSError:
+            pass
+
+
+def is_manual_login_in_progress() -> bool:
+    """ตรวจสอบว่ามีหน้าต่าง login_facebook.py เปิดรอผู้ใช้อยู่หรือไม่ (ล้าง Lock ที่ค้างจาก process ที่ตายไปแล้วให้ด้วย)"""
+    try:
+        with open(MANUAL_LOGIN_LOCK_FILE, "r", encoding="utf-8") as f:
+            pid = int(f.read().strip())
+    except (OSError, ValueError):
+        return False
+    if _is_pid_alive(pid):
+        return True
+    try:
+        os.remove(MANUAL_LOGIN_LOCK_FILE)
+    except OSError:
+        pass
+    return False
+
+
+def get_facebook_profile_cookies_mtime() -> float:
+    """เวลาแก้ไขล่าสุดของไฟล์ Cookies ใน Profile หลัก (0.0 หากไม่มี) ใช้ตรวจว่ามีการ Login ใหม่หรือยัง"""
+    for p in (
+        os.path.join(FACEBOOK_PROFILE_DIR, "Default", "Network", "Cookies"),
+        os.path.join(FACEBOOK_PROFILE_DIR, "Default", "Cookies"),
+    ):
+        try:
+            return os.path.getmtime(p)
+        except OSError:
+            continue
+    return 0.0
 
 # ตารางแปลงชื่อเดือนภาษาไทย (แบบย่อและเต็ม) เป็นตัวเลข (1-12)
 # ใช้ร่วมกันระหว่าง facebook.py, youtube.py และ x.py
@@ -327,7 +402,7 @@ def create_stealth_chrome_driver(
     headless: bool = True,
     profile_dir: Optional[str] = None,
     page_load_strategy: str = "normal",
-    skip_facebook_profile: bool = False
+    use_facebook_profile: bool = False
 ) -> "webdriver.Chrome":
     """
     สร้างและตั้งค่า Selenium Chrome WebDriver พร้อม Stealth Arguments
@@ -341,15 +416,14 @@ def create_stealth_chrome_driver(
 
     """
     การจัดการ Chrome User Profile:
-    1. หากระบุ profile_dir (เช่น login_facebook.py / logout_facebook.py ส่ง FACEBOOK_PROFILE_DIR):
+    1. หากระบุ profile_dir (เช่น CredentialsUtility/login_facebook.py ส่ง FACEBOOK_PROFILE_DIR):
        จะใช้งาน profile_dir นั้นโดยตรง และจะไม่ลบโฟลเดอร์ทิ้งเมื่อ driver.quit()
     2. หากไม่ระบุ profile_dir (crawler ทั่วไป / worker threads):
        จะสร้างโฟลเดอร์ profile แยกเฉพาะตัวของแต่ละ worker ใน temp directory เพื่อป้องกัน
        ปัญหา Chrome SingletonLock ชนกัน หรือ 'Chrome instance exited' ในระบบ Multithreading
-       และหากพบว่า FACEBOOK_PROFILE_DIR มี session Facebook อยู่ (มี Default/)
-       และไม่ได้ระบุ skip_facebook_profile=True หรือติด Action Block อยู่ จะคัดลอก
-       Cookies/Session มายัง temp profile นี้ให้อัตโนมัติ (ข้ามแคชขนาดใหญ่ ใช้เวลาเพียง ~0.06 วิ)
-       ทำให้ทุก worker สามารถดึง Live ที่ต้อง Login ได้ทันที
+       และหากระบุ use_facebook_profile=True (เฉพาะ facebook.py กับเพจที่ต้อง Login) พร้อมทั้ง
+       FACEBOOK_PROFILE_DIR มี session Facebook อยู่ (มี Default/) และไม่ติด Action Block/หลุด Login
+       จะคัดลอก Cookies/Session มายัง temp profile นี้ให้อัตโนมัติ (ข้ามแคชขนาดใหญ่ ใช้เวลาเพียง ~0.06 วิ)
     """
     is_custom = bool(profile_dir)
     if profile_dir:
@@ -362,7 +436,7 @@ def create_stealth_chrome_driver(
             f"chrome_crawler_{os.getpid()}_{uuid.uuid4().hex[:8]}"
         )
         should_clone = (
-            not skip_facebook_profile
+            use_facebook_profile
             and not is_facebook_blocked_this_round()
             and not is_facebook_logged_out()
         )

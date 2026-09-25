@@ -94,7 +94,7 @@ def test_current_session():
     driver = None
     try:
         # ใช้ Driver แบบ Clone จาก Profile หลัก (เหมือน Crawler จริง) เพื่อไม่ทำลาย Master Profile
-        driver = create_stealth_chrome_driver(headless=True)
+        driver = create_stealth_chrome_driver(headless=True, use_facebook_profile=True)
         driver.set_page_load_timeout(30)
 
         print("\n🌐 กำลังเปิดหน้า https://www.facebook.com ...")

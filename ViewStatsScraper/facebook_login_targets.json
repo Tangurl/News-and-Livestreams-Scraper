@@ -1,12 +1,4 @@
 {
-  "description": "รายการช่องและรายการออกอากาศที่ต้องใช้บัญชี Facebook ที่ล็อกอินไว้ในการดึง Live (ตั้งค่า 'enabled': false หากต้องการปิดการใช้บัญชีล็อกอินทั้งหมด เพื่อพักบัญชีหรือป้องกันการโดนบล็อก)",
-  "enabled": true,
-  "channels": [
-    "Thai PBS",
-    "Thairath TV",
-    "ONE"
-  ],
-  "broadcasts": [
-    "โหนกระแส"
-  ]
+  "description": "เปิด/ปิดการใช้บัญชี Facebook ที่ล็อกอินไว้ (ตั้ง 'enabled': false เพื่อพักบัญชีหรือป้องกันการโดนบล็อก) ส่วนเพจที่ต้องใช้บัญชีกำหนดจาก URL watch/<x>/ ใน FACEBOOK_LOGIN_PAGE_KEYWORDS (modules/facebook.py)",
+  "enabled": true
 }

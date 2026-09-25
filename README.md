@@ -11,11 +11,12 @@ This repository consolidates two major automation engines along with an interact
 ```
 BigProject/
 ├── dashboard.html              # 📊 Interactive Intelligence Dashboard (Live Google Sheet Sync)
+├── CredentialsUtility/         # 🔑 login_facebook.py / logout_facebook.py (Facebook Chrome profile)
+├── Login.bat / Logout.bat      # Shortcuts for CredentialsUtility scripts
 ├── ViewStatsScraper/           # 🔴 Live Broadcast Link Crawler & Real-Time View Count Scraper
 │   ├── view_stats_scraper.py   # View count snapshot engine (Facebook, YouTube, TikTok, X)
 │   ├── linkcrawler.py          # Automated live link crawler matching on-air program schedules
 │   ├── channels.json           # Registry & URL aliases for all 19 monitored TV stations
-│   ├── login_facebook.py       # Stealth Chrome driver for Facebook authenticated sessions
 │   ├── test_facebook_session.py# Session validator & auto-relogin tester
 │   ├── apps_script/            # Google Apps Script Web App backend (App.gs)
 │   ├── genre_classify/         # AI broadcast genre classification (Scikit-Learn ML model)
@@ -162,7 +163,7 @@ Key configuration variables in root `.env`:
 * **`GOOGLE_SHEET_ID`**: Target Google Sheet ID for `NewsScraper/run_all.py` (string between `/d/` and `/edit` in your spreadsheet URL).
 * **`CRAWLER_CONCURRENCY`**: Concurrency limit for link crawler (Default: `5`).
 * **`FB_AUTO_LOGIN`**: Enable automated re-authentication (`true`/`false`).
-* **`FB_EMAIL` / `FB_PASSWORD`**: Facebook account credentials for authenticated live stream access.
+* **`FB_EMAIL` / `FB_PASSWORD`**: Facebook account credentials filled in automatically when the logged-in profile gets logged out.
 * **`DTT_URL` / `REQUEST_TIMEOUT` / `APPS_SCRIPT_TIMEOUT`**: DTT Guide API & Apps Script timeout settings.
 
 ---
@@ -196,10 +197,18 @@ pip install -r requirements.txt
 ```
 
 #### Facebook Authentication (One-Time Setup)
-```bash
-python login_facebook.py
-```
-Opens Chrome with stealth flags. Log in to your Facebook account and press `[Enter]` in the console to save the encrypted session profile.
+Double-click `Login.bat` at the repository root (or `cd CredentialsUtility && python login_facebook.py`).
+`Start.bat` runs it automatically when the profile at `%LOCALAPPDATA%\LinkScraperAutomateacebook_profile` does not exist.
+
+Chrome opens on the Facebook login page. After logging in, press `[Enter]` in the console to save the session and close Chrome.
+`Logout.bat` logs out and deletes the profile.
+
+The logged-in profile is used only for Facebook pages whose `https://www.facebook.com/watch/<x>/` contains
+`thaipbs`, `thairath`, `hks2017` or `one` (`FACEBOOK_LOGIN_PAGE_KEYWORDS` in `modules/facebook.py`).
+
+If the session expires while crawling, the crawler re-logs in automatically with `FB_EMAIL` / `FB_PASSWORD`
+from `.env` (when `FB_AUTO_LOGIN=true`). If that fails it keeps crawling as guest until you run `Login.bat`,
+then switches back to the logged-in profile by itself.
 
 Validate the session at any time:
 ```bash

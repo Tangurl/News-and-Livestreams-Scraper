@@ -6,11 +6,15 @@ Logout บัญชี Facebook ออกจาก Chrome Profile ที่ logi
 ทิ้งทั้งหมด เพื่อล้าง Cookies/Session ให้สะอาดจริงๆ (ต้องรัน login_facebook.py ใหม่ก่อนใช้งาน
 linkcrawler.py อีกครั้ง หากรายการไหนต้อง Login บัญชี Facebook ถึงจะเห็น Live Video)
 
-วิธีใช้: python logout_facebook.py
+วิธีใช้: python logout_facebook.py (หรือดับเบิลคลิก Logout.bat ที่ root)
 """
 import os
 import shutil
+import sys
 import time
+
+# modules/ อยู่ใน ViewStatsScraper/ จึงต้องเพิ่มเข้า sys.path ก่อน import
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ViewStatsScraper"))
 
 from selenium.webdriver.common.by import By
 

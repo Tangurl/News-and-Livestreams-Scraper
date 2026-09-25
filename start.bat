@@ -14,6 +14,18 @@ if errorlevel 1 (
     exit /b 1
 )
 
+rem Facebook Chrome profile (must match FACEBOOK_PROFILE_DIR in ViewStatsScraper\modules\utilities.py)
+set "FB_PROFILE=%LOCALAPPDATA%\LinkScraperAutomate\facebook_profile"
+if exist "%FB_PROFILE%\Default\" (
+    echo [0/5] Facebook Chrome profile found: %FB_PROFILE%
+) else (
+    echo [0/5] Facebook Chrome profile not found. Please log in to Facebook...
+    pushd "%ROOT%CredentialsUtility"
+    python login_facebook.py
+    popd
+)
+echo.
+
 echo [1/5] Building config.js for dashboard...
 pushd "%ROOT%Dashboard"
 python make_config.py
