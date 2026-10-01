@@ -18,7 +18,7 @@ Follow these setup steps to deploy the orchestrator to a Windows server:
    ```
 3. Install the dependencies using the virtual environment's pip manager:
    ```cmd
-   .venv\Scripts\pip install -r requirements.txt
+   .venv\Scripts\pip install -r ..\requirements.txt
    ```
 
 ### Step 3: Run the Orchestrator
@@ -51,7 +51,7 @@ On Windows Server, you can use the built-in **Task Scheduler** to automate runs:
 
 ## 🛠️ Project Structure
 * `run_all.py`: The master orchestrator that triggers individual scrapers and handles merging/deduplication.
-* `requirements.txt`: Python package requirements.
+* Python package requirements live in `requirements.txt` at the repository root.
 * `run_daily.bat`: Windows batch script for automated task scheduling.
 * `run_daily.sh` / `com.thaipbs.scraper.daily.plist`: Mac configurations for automated running.
 * `master_scraped_data.csv`: Output location of the merged dataset.

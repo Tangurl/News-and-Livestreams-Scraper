@@ -5,20 +5,27 @@ Quick connection tester for Google Apps Script Web App.
 
 import os
 import sys
+
+# ไฟล์ test อยู่ใน ViewStatsScraper/tests/ จึงต้องเพิ่ม ViewStatsScraper/ เข้า sys.path
+# และ chdir ไปที่นั่น เพราะ channels.json / facebook_login_targets.json ถูกอ่านแบบ relative path
+_VSS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _VSS_DIR)
+os.chdir(_VSS_DIR)
+
 from view_stats_scraper import load_env_fallback
 from modules.sheets_writer import _http_get_json, _http_post_json
 
 load_env_fallback()
 
 def main():
-    url = os.getenv("POST_SCRIPT_API")
+    url = os.getenv("STREAM_STATS_API")
     print("=" * 70)
     print("🔍 Testing Google Apps Script Connection...")
     print(f"URL: {url}")
     print("=" * 70)
 
     if not url:
-        print("❌ Error: POST_SCRIPT_API is not set in .env")
+        print("❌ Error: STREAM_STATS_API is not set in .env")
         sys.exit(1)
 
     # Test 1: GET (Channel discovery)

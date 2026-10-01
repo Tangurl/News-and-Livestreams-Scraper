@@ -8,8 +8,8 @@ test_facebook_session.py
 3. ทดสอบการทำงานของระบบ Auto Re-Login ด้วยข้อมูลใน .env (เมื่อใส่ flag --auto-login)
 
 วิธีใช้:
-  python test_facebook_session.py              # ทดสอบตรวจเช็ค Session ปัจจุบัน
-  python test_facebook_session.py --auto-login # ทดสอบให้ระบบล็อกอินอัตโนมัติด้วยรหัสใน .env
+  python tests/test_facebook_session.py              # ทดสอบตรวจเช็ค Session ปัจจุบัน
+  python tests/test_facebook_session.py --auto-login # ทดสอบให้ระบบล็อกอินอัตโนมัติด้วยรหัสใน .env
 """
 import argparse
 import os
@@ -22,11 +22,11 @@ except ImportError:
     print("=" * 70)
     print("❌ ไม่พบแพ็กเกจ 'selenium' ในสภาพแวดล้อม Python นี้")
     print("👉 กรุณารันคำสั่งติดตั้ง Dependencies ก่อน:")
-    print("   pip install -r requirements.txt")
+    print("   pip install -r requirements.txt  (รันที่ root ของโปรเจกต์)")
     print("   (หรือสำหรับ Windows: python -m pip install -r requirements.txt)")
     print("=" * 70)
     sys.exit(1)
-_ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _ROOT_ENV = os.path.join(_ROOT_DIR, ".env")
 
 if not os.path.isfile(_ROOT_ENV):
@@ -48,6 +48,12 @@ with open(_ROOT_ENV, "r", encoding="utf-8") as f:
                 v = v[1:-1]
             os.environ.setdefault(k, v)
 
+
+# ไฟล์ test อยู่ใน ViewStatsScraper/tests/ จึงต้องเพิ่ม ViewStatsScraper/ เข้า sys.path
+# และ chdir ไปที่นั่น เพราะ channels.json / facebook_login_targets.json ถูกอ่านแบบ relative path
+_VSS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _VSS_DIR)
+os.chdir(_VSS_DIR)
 
 from modules.utilities import (
     FACEBOOK_PROFILE_DIR,

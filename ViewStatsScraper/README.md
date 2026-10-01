@@ -55,11 +55,7 @@ ViewStatsScraper/
 │   ├── youtube.py                # YouTube stream matching & scraper
 │   ├── x.py                      # X (Twitter) broadcast matching & scraper
 │   └── utilities.py              # Thai text & date utilities
-├── apps_script/
-│   └── App.gs                    # Google Apps Script code to paste into Google Sheets
-├── .env                          # Configuration
-├── requirements.txt              # Optional dependencies
-└── README.md
+└── README.md                     # (.env and requirements.txt live at the repository root)
 ```
 
 ---
@@ -67,13 +63,13 @@ ViewStatsScraper/
 ## ⚡ Setup: Google Apps Script
 
 1. Open your Google Sheet -> **Extensions** -> **Apps Script**.
-2. Replace the script editor content with the code from `apps_script/App.gs`.
+2. Replace the script editor content with the code from `Dashboard/App.gs` (at the project root).
 3. Click **Deploy** -> **New deployment** -> Type: **Web app**:
    - **Execute as**: `Me`
    - **Who has access**: `Anyone`
 4. Copy the Web app URL (ending in `/exec`) and paste it into `.env` as:
    ```env
-   POST_SCRIPT_API="https://script.google.com/macros/s/.../exec"
+   STREAM_STATS_API="https://script.google.com/macros/s/.../exec"
    ```
 
 ---

@@ -990,12 +990,12 @@ def attempt_facebook_auto_relogin(force: bool = False) -> bool:
             # 3.1 ตรวจจับ Captcha / 2FA / Checkpoint (ตรวจจาก visible text และ URL ไม่ตรวจ page_source เพื่อเลี่ยง false positive จาก minified JS)
             if any(k in after_url for k in ("/checkpoint", "/recover", "two_factor", "approvals_code")):
                 print(f"\n  ⚠️ [Facebook Auto-Login Failed] Facebook ต้องการการยืนยันตัวตนเพิ่มเติม (Checkpoint / 2FA / OTP)")
-                print(f"  👉 กรุณารัน Login.bat ที่ root เพื่อกดยืนยันตัวตนด้วยตนเองในหน้าต่างเบราว์เซอร์\n")
+                print(f"  👉 กรุณารัน LoginFacebook.bat ที่ root เพื่อกดยืนยันตัวตนด้วยตนเองในหน้าต่างเบราว์เซอร์\n")
                 return False
 
             if any(k in visible_body_text for k in ("security check", "ยืนยันความปลอดภัย", "enter code", "ป้อนรหัส", "captcha")):
                 print(f"\n  ⚠️ [Facebook Auto-Login Failed] Facebook แสดงหน้าต่าง Captcha หรือ Security Check")
-                print(f"  👉 กรุณารัน Login.bat ที่ root เพื่อผ่านการทดสอบด้วยตนเอง\n")
+                print(f"  👉 กรุณารัน LoginFacebook.bat ที่ root เพื่อผ่านการทดสอบด้วยตนเอง\n")
                 return False
 
             # 3.2 ตรวจสอบความสำเร็จ (มี c_user และ xs หรือมี Profile Avatar)
@@ -1044,7 +1044,7 @@ _LOGGED_OUT_AT: float = 0.0
 def maybe_restore_facebook_session() -> None:
     """
     หากก่อนหน้านี้ตรวจพบว่าหลุด Login ให้กลับมาใช้บัญชีที่ล็อกอินไว้อีกครั้งเมื่อ
-    - ผู้ใช้รัน Login.bat ใหม่แล้ว (ไฟล์ Cookies ใน Profile หลักถูกแก้ไขหลังเวลาที่หลุด และไม่มีหน้าต่าง Login ค้างอยู่) หรือ
+    - ผู้ใช้รัน LoginFacebook.bat ใหม่แล้ว (ไฟล์ Cookies ใน Profile หลักถูกแก้ไขหลังเวลาที่หลุด และไม่มีหน้าต่าง Login ค้างอยู่) หรือ
     - Auto Re-Login ด้วย .env สำเร็จ (ลองซ้ำได้ทุกครั้งที่พ้น FB_LOGIN_COOLDOWN_MINUTES เพราะระหว่างหลุด
       crawler ใช้ Guest จึงไม่ผ่าน check_and_handle_logged_out() ที่เป็นตัวเรียก Auto Re-Login ตามปกติ)
     """
@@ -1062,7 +1062,7 @@ def maybe_restore_facebook_session() -> None:
 def check_and_handle_logged_out(driver: webdriver.Chrome, target_url: str, auto_relogin: bool = True) -> bool:
     """
     ตรวจสอบว่าบัญชี Facebook หลุดการล็อกอิน (Session Expired, Checkpoint, หรือขึ้นหน้า 'Continue as...') หรือไม่
-    หากหลุด จะลอง Auto Re-Login ด้วย FB_EMAIL / FB_PASSWORD ใน .env ถ้าไม่สำเร็จจะแจ้งให้รัน Login.bat
+    หากหลุด จะลอง Auto Re-Login ด้วย FB_EMAIL / FB_PASSWORD ใน .env ถ้าไม่สำเร็จจะแจ้งให้รัน LoginFacebook.bat
     และสลับเป็น Clean Session จนกว่าจะ Login ใหม่สำเร็จ
     """
     global _WARNED_LOGGED_OUT_THIS_RUN, _LATEST_AUTH_COOKIES, _LOGGED_OUT_AT
@@ -1222,7 +1222,7 @@ def check_and_handle_logged_out(driver: webdriver.Chrome, target_url: str, auto_
                 print("\n  ==================================================================")
                 print(f"  ⚠️ [Facebook Session Logged Out] บัญชี Facebook ของคุณหลุดการล็อกอิน!")
                 print(f"  🔍 สาเหตุ: {reason}")
-                print(f"  👉 กรุณารัน Login.bat ที่ root เพื่อเข้าสู่ระบบ Facebook ใหม่อีกครั้ง (หรือตั้ง FB_EMAIL / FB_PASSWORD ใน .env)")
+                print(f"  👉 กรุณารัน LoginFacebook.bat ที่ root เพื่อเข้าสู่ระบบ Facebook ใหม่อีกครั้ง (หรือตั้ง FB_EMAIL / FB_PASSWORD ใน .env)")
                 print(f"  💡 สลับเป็นโหมด Clean Session (เหมือน Incognito) ให้อัตโนมัติ เพื่อให้ crawler ยังทำงานต่อไปได้")
                 print("  ==================================================================\n")
                 _WARNED_LOGGED_OUT_THIS_RUN = True
@@ -1313,7 +1313,7 @@ def scrape_live_videos(
     use_profile = need_login and not is_facebook_logged_out() and not is_facebook_blocked_this_round()
     if need_login:
         if is_facebook_logged_out():
-            print(f"  ⚠️ [Facebook Session] บัญชี Facebook หลุดการล็อกอิน -> สลับใช้ Clean Session Guest แทน (รัน Login.bat ที่ root เพื่อเข้าสู่ระบบ)")
+            print(f"  ⚠️ [Facebook Session] บัญชี Facebook หลุดการล็อกอิน -> สลับใช้ Clean Session Guest แทน (รัน LoginFacebook.bat ที่ root เพื่อเข้าสู่ระบบ)")
         elif is_facebook_blocked_this_round():
             print(f"  ⚠️ [Facebook Session] บัญชี Facebook ติด Action Block ในรอบนี้ -> สลับใช้ Clean Session Guest แทน")
         else:

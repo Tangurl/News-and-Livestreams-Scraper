@@ -5,7 +5,7 @@
  *   1. เปิด Google Sheet ที่จะใช้เก็บข้อมูล -> Extensions -> Apps Script
  *   2. วางโค้ดนี้ทั้งหมดแทนที่โค้ดเดิม แล้วกด Save
  *   3. Deploy -> Manage deployments -> กดไอคอนดินสอ (Edit) -> เลือก Version: New version -> กด Deploy
- *   4. ใช้ Web app URL (.../exec) ใน .env: POST_SCRIPT_API="..."
+ *   4. ใช้ Web app URL (.../exec) ใน .env: STREAM_STATS_API="..."
  *
  * รองรับ:
  *   1. create / get / put (ระบบตารางรายการเดิมของ CombinedScraper)

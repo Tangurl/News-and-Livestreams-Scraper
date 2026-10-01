@@ -3,7 +3,17 @@
 Unit tests for DD-MM-YY date parsing, 7-column layout, and 19 channels resolution.
 """
 
+import os
+import sys
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
+# ไฟล์ test อยู่ใน ViewStatsScraper/tests/ จึงต้องเพิ่ม ViewStatsScraper/ เข้า sys.path
+# และ chdir ไปที่นั่น เพราะ channels.json / facebook_login_targets.json ถูกอ่านแบบ relative path
+_VSS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _VSS_DIR)
+os.chdir(_VSS_DIR)
+
 from view_stats_scraper import parse_schedule_datetime as vs_parse_date, get_channel_config
 from linkcrawler import parse_schedule_datetime as lc_parse_date, load_channels_config, resolve_channel_config
 
@@ -28,8 +38,10 @@ def test_date_parsing():
     for date_str, time_str, expected in test_cases:
         res_vs = vs_parse_date(date_str, time_str)
         res_lc = lc_parse_date(date_str, time_str)
+        # linkcrawler คืนค่าเวลาแบบมี timezone (Asia/Bangkok, +07:00) ส่วน view_stats_scraper คืนค่าแบบไม่มี timezone
+        expected_lc = expected.replace(tzinfo=ZoneInfo("Asia/Bangkok"))
         assert res_vs == expected, f"view_stats_scraper failed on ({date_str}, {time_str}): got {res_vs}, expected {expected}"
-        assert res_lc == expected, f"linkcrawler failed on ({date_str}, {time_str}): got {res_lc}, expected {expected}"
+        assert res_lc == expected_lc, f"linkcrawler failed on ({date_str}, {time_str}): got {res_lc}, expected {expected_lc}"
         print(f"✅ Date parse ({date_str} {time_str}) -> {expected.strftime('%Y-%m-%d %H:%M')}: PASS")
 
     print("\n🎉 ALL DATE PARSING TESTS PASSED!\n")

@@ -23,16 +23,18 @@ if errorlevel 1 (
 )
 echo.
 
-rem Facebook Chrome profile (must match FACEBOOK_PROFILE_DIR in ViewStatsScraper\modules\utilities.py)
-set "FB_PROFILE=%LOCALAPPDATA%\LinkScraperAutomate\facebook_profile"
-if exist "%FB_PROFILE%\Default\" (
-    echo [2/7] Facebook Chrome profile found: %FB_PROFILE%
-) else (
-    echo [2/7] Facebook Chrome profile not found. Please log in to Facebook...
-    pushd "%ROOT%CredentialsUtility"
+rem Facebook Chrome profile (FACEBOOK_PROFILE_DIR in ViewStatsScraper\modules\utilities.py)
+rem The profile folder alone is not enough: it is created as soon as Chrome opens, even if the
+rem user never logs in. "--check" looks for a valid c_user cookie instead (exit 0 = logged in).
+pushd "%ROOT%CredentialsUtility"
+python login_facebook.py --check
+if errorlevel 1 (
+    echo [2/7] Facebook session not found. Please log in to Facebook...
     python login_facebook.py
-    popd
+) else (
+    echo [2/7] Facebook session found.
 )
+popd
 echo.
 
 echo [3/7] Building config.js for dashboard...

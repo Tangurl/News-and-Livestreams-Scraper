@@ -36,7 +36,7 @@ for _stream in (sys.stdout, sys.stderr):
 # create_stealth_chrome_driver()) ส่วน youtube.py / x.py ไม่ใช้ Profile นี้
 #
 # ตั้งใจเก็บไว้นอกโฟลเดอร์โปรเจกต์ (เช่น %LOCALAPPDATA%\LinkScraperAutomate บน Windows) แทนที่จะ
-# เก็บไว้ใต้ตัวโปรเจกต์เอง เพราะโปรเจกต์นี้มักถูก clone ไว้ใต้ Desktop\...\WB-07-LinkScraperAutomate
+# เก็บไว้ใต้ตัวโปรเจกต์เอง เพราะโปรเจกต์นี้มักถูก clone ไว้ใต้ Desktop\...\News-and-Livestreams-Scraper
 # ซึ่ง path ยาวอยู่แล้ว โดยเฉพาะเครื่องที่ Desktop ถูก OneDrive sync ไว้ (เติม
 # "OneDrive - ชื่อบริษัท\Desktop\" นำหน้า) ทำให้ path เต็มของไฟล์ลึกๆที่ Chrome สร้างขึ้นเอง เช่น
 # Default\Service Worker\CacheStorage\<hash>\... ทะลุขีดจำกัด Windows MAX_PATH (260 ตัวอักษร)
@@ -177,6 +177,44 @@ def get_facebook_profile_cookies_mtime() -> float:
         except OSError:
             continue
     return 0.0
+
+
+def has_facebook_session_cookie() -> bool:
+    """
+    ตรวจว่า Profile หลักมี Cookie c_user ของ facebook.com ที่ยังไม่หมดอายุหรือไม่ (ไม่ต้องเปิด Chrome)
+    การมีแค่โฟลเดอร์ Profile ไม่ได้แปลว่า Login แล้ว เพราะ login_facebook.py สร้างโฟลเดอร์ไว้ตั้งแต่เปิด Chrome
+    อ่านจากไฟล์ Cookies (SQLite) ที่ copy ออกมาก่อน เพราะไฟล์ต้นฉบับอาจถูก Chrome Lock อยู่
+    """
+    import sqlite3
+
+    # expires_utc ของ Chrome นับเป็น microseconds ตั้งแต่ 1601-01-01 (0 = session cookie ไม่มีวันหมดอายุ)
+    now_chrome = int((time.time() + 11644473600) * 1_000_000)
+    for p in (
+        os.path.join(FACEBOOK_PROFILE_DIR, "Default", "Network", "Cookies"),
+        os.path.join(FACEBOOK_PROFILE_DIR, "Default", "Cookies"),
+    ):
+        if not os.path.isfile(p):
+            continue
+        tmp_dir = tempfile.mkdtemp(prefix="fb_cookie_check_")
+        try:
+            tmp_db = os.path.join(tmp_dir, "Cookies")
+            shutil.copy2(p, tmp_db)
+            conn = sqlite3.connect(tmp_db)
+            try:
+                row = conn.execute(
+                    "SELECT 1 FROM cookies WHERE name = 'c_user' AND host_key LIKE '%facebook.com' "
+                    "AND (expires_utc = 0 OR expires_utc > ?) LIMIT 1",
+                    (now_chrome,),
+                ).fetchone()
+            finally:
+                conn.close()
+            if row:
+                return True
+        except (OSError, sqlite3.Error):
+            continue
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+    return False
 
 # ตารางแปลงชื่อเดือนภาษาไทย (แบบย่อและเต็ม) เป็นตัวเลข (1-12)
 # ใช้ร่วมกันระหว่าง facebook.py, youtube.py และ x.py
@@ -411,7 +449,7 @@ def create_stealth_chrome_driver(
     if webdriver is None:
         raise RuntimeError(
             "ไม่พบแพ็กเกจ 'selenium' ในสภาพแวดล้อม Python นี้\n"
-            "👉 กรุณารันคำสั่งติดตั้ง: pip install -r requirements.txt หรือ python -m pip install selenium"
+            "👉 กรุณารันคำสั่งติดตั้ง: pip install -r requirements.txt (ที่ root ของโปรเจกต์) หรือ python -m pip install selenium"
         )
 
     """

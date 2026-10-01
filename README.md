@@ -6,28 +6,34 @@ A comprehensive, unified intelligence platform combining automated television br
 
 ## 🌟 Overview & Architecture
 
-This repository consolidates two major automation engines along with an interactive visualization dashboard:
+This repository consolidates three automation engines (program schedule fetcher, live view stats scraper, news scraper) along with an interactive visualization dashboard.
+On Windows, double-click `Start.bat` at the repository root to install dependencies and launch everything at once.
 
 ```
-BigProject/
-├── dashboard.html              # 📊 Interactive Intelligence Dashboard (Live Google Sheet Sync)
+News-and-Livestreams-Scraper/
+├── Start.bat                   # 🚀 One-click launcher (installs deps, checks Facebook login, starts every service)
+├── LoginFacebook.bat           # Shortcut for CredentialsUtility/login_facebook.py
+├── LogoutFacebook.bat          # Shortcut for CredentialsUtility/logout_facebook.py
+├── .env.example                # Template for the single root .env shared by every module
+├── requirements.txt            # Combined Python dependencies (installed by Start.bat)
 ├── CredentialsUtility/         # 🔑 login_facebook.py / logout_facebook.py (Facebook Chrome profile)
-├── Login.bat / Logout.bat      # Shortcuts for CredentialsUtility scripts
+├── Dashboard/                  # 📊 Interactive Intelligence Dashboard (Live Google Sheet Sync)
+│   ├── dashboard.html          # Single-file dashboard UI
+│   ├── make_config.py          # Builds config.js from the root .env (run by Start.bat)
+│   └── App.gs                  # Google Apps Script Web App backend (the only copy)
+├── ProgramScheduleFetcher/     # 🗓️ Fetches TV program schedules (DTT Guide) and uploads them to Google Sheets
 ├── ViewStatsScraper/           # 🔴 Live Broadcast Link Crawler & Real-Time View Count Scraper
 │   ├── view_stats_scraper.py   # View count snapshot engine (Facebook, YouTube, TikTok, X)
 │   ├── linkcrawler.py          # Automated live link crawler matching on-air program schedules
 │   ├── channels.json           # Registry & URL aliases for all 19 monitored TV stations
-│   ├── test_facebook_session.py# Session validator & auto-relogin tester
-│   ├── apps_script/            # Google Apps Script Web App backend (App.gs)
+│   ├── tests/                  # Unit tests & session validator (test_*.py)
 │   ├── genre_classify/         # AI broadcast genre classification (Scikit-Learn ML model)
 │   ├── modules/                # Modular crawlers, sheets writer & utilities
-│   ├── requirements.txt        # Python dependencies for ViewStatsScraper
 │   └── README.md               # Detailed ViewStatsScraper documentation
 ├── NewsScraper/                # 📰 Multi-Portal Thai News Article Scraper Orchestrator
 │   ├── run_all.py              # Master orchestrator triggering 37+ news portals
 │   ├── *-scrapers/             # Dedicated scraper directories per news outlet
 │   ├── run_daily.sh / .bat     # Automation scripts for macOS/Linux & Windows Server
-│   ├── requirements.txt        # Python dependencies for NewsScraper
 │   └── README.md               # Detailed NewsScraper deployment guide
 ├── .gitignore                  # Comprehensive security and cache exclusion rules
 └── README.md                   # Platform master documentation
@@ -155,12 +161,13 @@ All modules (`NewsScraper`, `ViewStatsScraper`, and `ProgramScheduleFetcher`) pu
 
 Copy the template to create your `.env`:
 ```bash
-cp .env.example .env
+cp .env.example .env      # macOS/Linux
+copy .env.example .env    # Windows (cmd)
 ```
 
 Key configuration variables in root `.env`:
 * **`STREAM_STATS_API`**: Deployed Google Apps Script Web App URL (`.../exec`).
-* **`GOOGLE_SHEET_ID`**: Target Google Sheet ID for `NewsScraper/run_all.py` (string between `/d/` and `/edit` in your spreadsheet URL).
+* **`NEWS_SHEET_ID`**: Target Google Sheet ID for `NewsScraper/run_all.py` and the dashboard's news page (string between `/d/` and `/edit` in your spreadsheet URL).
 * **`CRAWLER_CONCURRENCY`**: Concurrency limit for link crawler (Default: `5`).
 * **`FB_AUTO_LOGIN`**: Enable automated re-authentication (`true`/`false`).
 * **`FB_EMAIL` / `FB_PASSWORD`**: Facebook account credentials filled in automatically when the logged-in profile gets logged out.
@@ -172,9 +179,9 @@ Key configuration variables in root `.env`:
 
 ```bash
 cd ProgramScheduleFetcher
-pip install -r requirements.txt
+pip install -r ../requirements.txt   # single requirements.txt at the repository root
 ```
-* Deploy `App.gs` Google Apps Script Web App on your Google Sheet, then set `POST_SCRIPT_API` (or `GSHEET_URL`) in the root `.env`.
+* Deploy `Dashboard/App.gs` Google Apps Script Web App on your Google Sheet, then set `STREAM_STATS_API` in the root `.env`.
 
 ```bash
 python scheduler.py
@@ -193,26 +200,27 @@ Running `python program.py` with no flags does a single one-off fetch (no loop, 
 ### 2. ViewStatsScraper Setup
 ```bash
 cd ViewStatsScraper
-pip install -r requirements.txt
+pip install -r ../requirements.txt   # single requirements.txt at the repository root
 ```
 
 #### Facebook Authentication (One-Time Setup)
-Double-click `Login.bat` at the repository root (or `cd CredentialsUtility && python login_facebook.py`).
-`Start.bat` runs it automatically when the profile at `%LOCALAPPDATA%\LinkScraperAutomateacebook_profile` does not exist.
+Double-click `LoginFacebook.bat` at the repository root (or `cd CredentialsUtility && python login_facebook.py`).
+`Start.bat` runs it automatically when the profile at `%LOCALAPPDATA%\LinkScraperAutomate\facebook_profile` has no logged-in
+session (checked with `python login_facebook.py --check`, which looks for a valid `c_user` cookie without opening Chrome).
 
 Chrome opens on the Facebook login page. After logging in, press `[Enter]` in the console to save the session and close Chrome.
-`Logout.bat` logs out and deletes the profile.
+`LogoutFacebook.bat` logs out and deletes the profile.
 
 The logged-in profile is used only for Facebook pages whose `https://www.facebook.com/watch/<x>/` contains
 `thaipbs`, `thairath`, `hks2017` or `one` (`FACEBOOK_LOGIN_PAGE_KEYWORDS` in `modules/facebook.py`).
 
 If the session expires while crawling, the crawler re-logs in automatically with `FB_EMAIL` / `FB_PASSWORD`
-from `.env` (when `FB_AUTO_LOGIN=true`). If that fails it keeps crawling as guest until you run `Login.bat`,
+from `.env` (when `FB_AUTO_LOGIN=true`). If that fails it keeps crawling as guest until you run `LoginFacebook.bat`,
 then switches back to the logged-in profile by itself.
 
-Validate the session at any time:
+Validate the session at any time (from inside `ViewStatsScraper/`):
 ```bash
-python test_facebook_session.py
+python tests/test_facebook_session.py
 ```
 
 ---
@@ -220,15 +228,16 @@ python test_facebook_session.py
 ### 3. NewsScraper Setup
 ```bash
 cd NewsScraper
-pip install -r requirements.txt
+pip install -r ../requirements.txt   # single requirements.txt at the repository root
 ```
 
 Google Sheets Authentication (`token.json`):
 `NewsScraper` syncs merged articles to Google Sheets using the Google Sheets & Drive APIs via OAuth 2.0.
 
-* **File Requirement:** Place your authorized `token.json` in either:
-  * `NewsScraper/token.json` (recommended root level), OR
-  * `NewsScraper/thaipbs-scrapers/token.json`
+* **File Requirement:** Place your authorized `token.json` in one of these locations (checked in this order):
+  1. `NewsScraper/thaipbs-scrapers/token.json`
+  2. `NewsScraper/token.json`
+  3. `token.json` at the repository root
 * **How `token.json` Works:**
   * It stores your authorized OAuth 2.0 credentials (`access_token`, `refresh_token`, client secrets).
   * `run_all.py` automatically refreshes the token using the refresh token when it expires.
@@ -242,38 +251,37 @@ Google Sheets Authentication (`token.json`):
 Target Google Sheet Configuration:
 In the root `.env`, set:
 ```env
-GOOGLE_SHEET_ID="<YOUR_NEWS_GOOGLE_SHEET_ID>"
+NEWS_SHEET_ID="<YOUR_NEWS_GOOGLE_SHEET_ID>"
 ```
-`run_all.py` automatically reads `GOOGLE_SHEET_ID` from the root `.env`. You can also override it on the fly with `--sheet-id <ID>`.
+`run_all.py` automatically reads `NEWS_SHEET_ID` from the root `.env` (`GOOGLE_SHEET_ID` is still accepted as a fallback). You can also override it on the fly with `--sheet-id <ID>`.
 
 ---
 
-### 4. Interactive Analytics Dashboard (`dashboard.html`) Setup
+### 4. Interactive Analytics Dashboard (`Dashboard/dashboard.html`) Setup
 
-The dashboard is a single-file, zero-dependency HTML/JavaScript web application that streams data directly from Google Sheets (for news aggregation) and the Apps Script Web App (for live TV stream analytics).
+The dashboard is a single-file HTML/JavaScript web application that streams data directly from Google Sheets (for news aggregation) and the Apps Script Web App (for live TV stream analytics).
 
-Open `dashboard.html` in an editor and configure the variables at **lines 3290 and 3293**:
+You do **not** edit `dashboard.html` by hand. It loads its settings from `Dashboard/config.js`, which `Dashboard/make_config.py` generates from the root `.env`:
 
-```javascript
-// Google Sheet Configuration (Line 3290)
-const SHEET_ID = "<YOUR_NEWS_GOOGLE_SHEET_ID>";
-
-// Apps Script Web App (.env: POST_SCRIPT_API) — endpoint สำหรับหน้า "Live View Stats" (Line 3293)
-const VIEW_STATS_API = "<YOUR_APPS_SCRIPT_WEB_APP_URL>";
+```bash
+cd Dashboard
+python make_config.py
 ```
 
-1. **`SHEET_ID` (Line 3290)**:
-   * Paste your **News Google Sheet ID** (the same Sheet ID configured in root `.env`).
+`Start.bat` runs this step automatically. The dashboard reads two values from `.env`:
+
+1. **`NEWS_SHEET_ID`**:
+   * Your **News Google Sheet ID**.
    * Ensure the Google Sheet permissions are set to **"Anyone with the link can view"** so the dashboard can query the sheet via the Google Visualization API.
 
-2. **`VIEW_STATS_API` (Line 3293)**:
-   * Paste your deployed **Google Apps Script Web App URL** (`https://script.google.com/macros/s/.../exec`).
-   * This is **the exact same URL** set in root `.env` under `POST_SCRIPT_API`.
+2. **`STREAM_STATS_API`**:
+   * Your deployed **Google Apps Script Web App URL** (`https://script.google.com/macros/s/.../exec`), deployed from `Dashboard/App.gs`.
    * Powers real-time live view counts, peak statistics, channel comparisons, and link overrides.
 
 3. **Running the Dashboard**:
-   * Simply double-click `dashboard.html` or open it in any web browser (Chrome, Edge, Safari, Firefox).
-   * No web server or build step required!
+   * Double-click `Dashboard/dashboard.html` or open it in any web browser (Chrome, Edge, Safari, Firefox). `Start.bat` opens it for you at the end.
+   * No web server required. Re-run `make_config.py` whenever you change `.env`.
+   * `config.js` contains values from `.env`, so it is git-ignored. Do not commit it.
 
 ---
 
@@ -281,4 +289,4 @@ const VIEW_STATS_API = "<YOUR_APPS_SCRIPT_WEB_APP_URL>";
 
 * **Never commit credentials**: All `.env` files, OAuth tokens (`token.json`), and service credentials are strictly excluded via `.gitignore`.
 * **Sample Configurations**: Always distribute configurations using `.env.example`.
-* **Profiles & Cache**: Browser profile caches and local storage folders (`LinkScraperAutomate/`, `cache/`) are ignored by version control.
+* **Profiles & Cache**: The Facebook Chrome profile lives outside the repository (`%LOCALAPPDATA%\LinkScraperAutomate\facebook_profile`), and browser caches / local storage folders (`LinkScraperAutomate/`, `facebook_profile/`, `cache/`) are ignored by version control.

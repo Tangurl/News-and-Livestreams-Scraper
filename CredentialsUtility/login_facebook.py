@@ -10,7 +10,9 @@ Login บัญชี Facebook ก่อนถึงจะดูได้
 หาก Facebook เด้ง Logout ระหว่าง crawler ทำงาน ระบบจะ Login ใหม่ให้อัตโนมัติด้วย FB_EMAIL /
 FB_PASSWORD ใน .env ที่ root (ดู attempt_facebook_auto_relogin() ใน modules/facebook.py)
 
-วิธีใช้: python login_facebook.py (หรือดับเบิลคลิก Login.bat ที่ root)
+วิธีใช้: python login_facebook.py (หรือดับเบิลคลิก LoginFacebook.bat ที่ root)
+       python login_facebook.py --check  -> ไม่เปิด Chrome แค่ตรวจว่า Profile มี Session ที่ Login แล้วหรือไม่
+                                            (exit code 0 = Login แล้ว, 1 = ยังไม่ Login) ใช้โดย Start.bat
 เมื่อต้องการ Logout และล้าง Session ทิ้ง ให้รัน logout_facebook.py
 """
 import os
@@ -19,7 +21,12 @@ import sys
 # modules/ อยู่ใน ViewStatsScraper/ จึงต้องเพิ่มเข้า sys.path ก่อน import
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ViewStatsScraper"))
 
-from modules.utilities import FACEBOOK_PROFILE_DIR, create_stealth_chrome_driver, manual_login_lock
+from modules.utilities import (
+    FACEBOOK_PROFILE_DIR,
+    create_stealth_chrome_driver,
+    has_facebook_session_cookie,
+    manual_login_lock,
+)
 
 
 def main():
@@ -48,4 +55,6 @@ def main():
 
 
 if __name__ == "__main__":
+    if "--check" in sys.argv[1:]:
+        sys.exit(0 if has_facebook_session_cookie() else 1)
     main()

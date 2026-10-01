@@ -7,8 +7,11 @@ from datetime import datetime
 import sys
 import os
 
-# Ensure ViewStatsScraper is in sys.path
-sys.path.insert(0, os.path.dirname(__file__))
+# ไฟล์ test อยู่ใน ViewStatsScraper/tests/ จึงต้องเพิ่ม ViewStatsScraper/ เข้า sys.path
+# และ chdir ไปที่นั่น เพราะ channels.json / facebook_login_targets.json ถูกอ่านแบบ relative path
+_VSS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _VSS_DIR)
+os.chdir(_VSS_DIR)
 
 from modules.link_resolver import resolve_target_urls_for_program
 from modules.facebook import find_matching_video

@@ -8,8 +8,11 @@ from datetime import datetime
 import sys
 import os
 
-# Add parent directory to sys.path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# ไฟล์ test อยู่ใน ViewStatsScraper/tests/ จึงต้องเพิ่ม ViewStatsScraper/ เข้า sys.path
+# และ chdir ไปที่นั่น เพราะ channels.json / facebook_login_targets.json ถูกอ่านแบบ relative path
+_VSS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _VSS_DIR)
+os.chdir(_VSS_DIR)
 
 from modules.facebook import (
     _score_title_match,

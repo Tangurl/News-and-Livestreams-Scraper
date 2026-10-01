@@ -69,9 +69,9 @@ def fetch_all_view_stats_rows(api_url: str) -> List[List]:
 
 
 def main():
-    api_url = os.getenv("POST_SCRIPT_API")
+    api_url = os.getenv("STREAM_STATS_API")
     if not api_url:
-        print("❌ Error: POST_SCRIPT_API not set in .env")
+        print("❌ Error: STREAM_STATS_API not set in .env")
         sys.exit(1)
 
     print("=" * 80)
@@ -161,7 +161,7 @@ def main():
             print("\n⚠️ Note: Apps Script returned 'unknown action: set_range'.")
             print("👉 Please deploy the updated App.gs to Google Apps Script first:")
             print("   1. Open Google Sheet -> Extensions -> Apps Script")
-            print("   2. Paste the updated code from 'apps_script/App.gs'")
+            print("   2. Paste the updated code from 'Dashboard/App.gs'")
             print("   3. Click Deploy -> Manage deployments -> Edit -> Version: New version -> Deploy")
             print("   4. Re-run this script: python3 backfill_genres.py")
         else:
