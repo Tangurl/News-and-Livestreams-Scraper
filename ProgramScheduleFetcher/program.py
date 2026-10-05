@@ -87,7 +87,7 @@ def fetch_program_data() -> dict:
             log.warning("Fetch attempt %d/%d failed: %s", attempt, MAX_RETRIES, exc)
             if attempt < MAX_RETRIES:
                 time.sleep(RETRY_WAIT)
-            continue
+            # continue
 
         msg = data.get("responseMessage", {})
         if str(msg.get("code")) != "2000":

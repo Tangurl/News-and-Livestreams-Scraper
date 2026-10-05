@@ -48,13 +48,13 @@ News-and-Livestreams-Scraper/
 > 💡 **Channel Behavior:** Running `python linkcrawler.py` without arguments **scrapes ALL 19 channels by default** (default `--channel all`). It does NOT monitor just a single channel unless explicitly specified via `--channel "<Name>"`.
 
 ```bash
-python linkcrawler.py --current-only --skip-x-except-thaipbs --workers 5
+python linkcrawler.py --current-only --skip-x-except-thaipbs --workers 3
 ```
 
 #### Why this is the recommended way:
 * `--current-only`: Focuses exclusively on programs that are broadcasting **on-air right now** according to the channel's schedule, completely skipping older ended shows. This keeps the crawling cycle fast and ensures newly started live streams are picked up immediately.
 * `--skip-x-except-thaipbs`: Based on extensive observation across Thai digital TV stations, **other channels do not stream their live broadcasts on X (Twitter)**. Searching X for all 19 channels wastes browser resources, causes unnecessary network latency, and increases the risk of rate-limiting. Thai PBS is the primary station that consistently pushes live streams to X.
-* `--workers 5`: Enables concurrent multi-worker scraping to process channels in parallel, drastically reducing the total cycle duration.
+* `--workers 3`: Enables concurrent multi-worker scraping to process channels in parallel, drastically reducing the total cycle duration.
 
 
 > #### ⚠️ Strict Concurrency Limit (Workers $\le$ 5)
@@ -213,6 +213,7 @@ Chrome opens on the Facebook login page. After logging in, press `[Enter]` in th
 
 The logged-in profile is used only for Facebook pages whose `https://www.facebook.com/watch/<x>/` contains
 `thaipbs`, `thairath`, `hks2017` or `one` (`FACEBOOK_LOGIN_PAGE_KEYWORDS` in `modules/facebook.py`).
+`hks2017` is the direct live page URL of โหนกระแส (`https://www.facebook.com/watch/HKS2017/`).
 
 If the session expires while crawling, the crawler re-logs in automatically with `FB_EMAIL` / `FB_PASSWORD`
 from `.env` (when `FB_AUTO_LOGIN=true`). If that fails it keeps crawling as guest until you run `LoginFacebook.bat`,

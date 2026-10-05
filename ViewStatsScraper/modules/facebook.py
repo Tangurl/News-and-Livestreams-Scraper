@@ -46,6 +46,7 @@ FACEBOOK_LOGIN_TARGETS_FILE = "facebook_login_targets.json"
 # เพจ Facebook ที่ต้องใช้บัญชีที่ล็อกอินไว้ถึงจะเห็น Live (จับคู่แบบ substring กับ <x> ใน
 # https://www.facebook.com/watch/<x>/ หลัง lower().strip()) ใช้ URL เป็นเกณฑ์แทนชื่อช่อง/ชื่อรายการ
 # เพราะรายการที่ทำ broadcast override (เช่น โหนกระแส -> watch/HKS2017/) สุดท้ายก็ต้องเปิดผ่าน URL อยู่ดี
+# "hks2017" คือ URL เพจ Live ของโหนกระแสโดยตรง (https://www.facebook.com/watch/HKS2017/)
 FACEBOOK_LOGIN_PAGE_KEYWORDS = ("thaipbs", "thairath", "hks2017", "one")
 
 _CACHED_LOGIN_TARGETS: Optional[Dict] = None
@@ -150,6 +151,7 @@ def dismiss_login_popup(driver: webdriver.Chrome, debug_screenshot_path: Optiona
     ปิด Popup Login Modal และ Dialog บังหน้าจอ
     หากระบุ debug_screenshot_path จะถ่ายภาพหน้าจอหลังพยายามปิด popup ไว้ให้ตรวจสอบว่า
     ปิดสำเร็จจริงหรือไม่ (สำหรับ debug กรณีที่ crawler ดึงวิดีโอไม่เจอ)
+    debug_screenshot_path มีไว้ debug ด้วยมือเท่านั้น โค้ด production ไม่ได้ส่งค่านี้ และไม่ควรอ้างอิงถึง
     """
     try:
         # หมายเหตุ: บาง popup login ของ Facebook ไม่ได้อยู่ใน div[role='dialog']
